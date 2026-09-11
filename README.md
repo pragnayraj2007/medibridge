@@ -22,7 +22,7 @@ Patient app (Expo) ──┐                        ┌── Groq gpt-oss-120b:
                      ├──→ FastAPI (Vercel) ───┼── Safety Engine (deterministic, final triage)
 Doctor web (Next.js)─┘     via /api proxy     ├── Scheduler (deterministic: priority, availability, distance)
                                               ├── Sarvam: speech-to-text (Saaras) / text-to-speech (Bulbul)
-                                              ├── PaddleOCR service (optional) + Gemini multimodal
+                                              ├── PaddleOCR (Hugging Face Space) + Gemini multimodal
                                               └── Supabase: patients, doctors, cases, appointments, documents
 ```
 
@@ -70,7 +70,7 @@ npx eas-cli@latest build -p android --profile preview   # installable APK
 
 Database: in the Supabase SQL Editor run `apps/backend/supabase/schema.sql`, then `supabase/migrations/002_patients_appointments.sql`. The migration adds the tables, the private `documents` bucket and the three demo doctors. The demo doctor password is shared by the team and is not in this repo (only its hash is).
 
-PaddleOCR is too large for Vercel functions. To use it, run PaddleOCR / PaddleX serving elsewhere (`paddlex --serve --pipeline OCR`) and set `PADDLEOCR_URL`.
+PaddleOCR is too large for Vercel functions, so it runs as its own small service: `apps/ocr-service` (PaddleOCR 3.x, PP-OCRv5 mobile models) on a free Hugging Face Docker Space. Put a Hugging Face write token in `local-secrets.txt` as `HF_TOKEN` and run `scripts/deploy-ocr-space.py`. It creates the Space, sets a bearer token, waits for the build, tests it and writes `PADDLEOCR_URL`/`PADDLEOCR_TOKEN` for `set-api-env.bat`. A free Space sleeps after about 48 h idle, so open it once before a demo. If OCR is slow or down, Gemini still reads the document.
 
 ## Deploy (Windows, from the repo root)
 
@@ -90,6 +90,6 @@ Secrets exist only on the backend. Never commit `.env` or `local-secrets.txt`.
 - Distances use one fixed demo patient location. Patient GPS is not used yet.
 - There are no working-hours calendars, and urgent cases do not bump existing bookings.
 - Doctor auth is demo-grade. A patient ID can only be reopened on the device that created it.
-- PaddleOCR needs a separately hosted service. Without it, Gemini reads the document directly.
+- PaddleOCR runs on a free Hugging Face Space. It is slow on its first request after sleeping; Gemini covers it.
 - Voice and document analysis need `SARVAM_API_KEY` and `GEMINI_API_KEY`. Without them the app says so and continues with text.
 - The Safety Engine thresholds and the scheduling rules need clinical review before any real use. This is a workflow tool, not a diagnostic system.

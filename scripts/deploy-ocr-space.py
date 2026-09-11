@@ -34,7 +34,7 @@ def read_secrets() -> dict:
 
 def add_secret(name: str, value: str) -> None:
     text = SECRETS.read_text(encoding="utf-8")
-    lines = [l for l in text.splitlines() if not l.startswith(name + "=")]
+    lines = [ln for ln in text.splitlines() if not ln.startswith(name + "=")]
     lines.append(f"{name}={value}")
     SECRETS.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
