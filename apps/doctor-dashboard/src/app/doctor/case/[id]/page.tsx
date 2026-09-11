@@ -268,7 +268,7 @@ export default function PatientDetail() {
                       <div className="text-sm font-semibold text-gray-800">{d.name} <span className="text-xs font-normal text-gray-400">{d.doc_type}</span></div>
                       <div className="flex items-center gap-2 text-[11px]">
                         <span className="rounded bg-gray-100 px-1.5 py-0.5">OCR: {d.ocr_status}</span>
-                        <span className="rounded bg-gray-100 px-1.5 py-0.5">Gemini: {d.analysis_status}</span>
+                        <span className="rounded bg-gray-100 px-1.5 py-0.5">Gemini: {d.analysis_status}{d.analysis_error ? ` (${d.analysis_error})` : ''}</span>
                         {d.has_file && <button onClick={() => openDocument(d.id)} className="text-blue-600 hover:underline">Open original</button>}
                       </div>
                     </div>

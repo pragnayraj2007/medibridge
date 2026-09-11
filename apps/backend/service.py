@@ -159,6 +159,8 @@ def public_document(d: dict) -> dict:
         "created_at": d.get("created_at"),
         "ocr_status": (d.get("ocr") or {}).get("status"),
         "analysis_status": (d.get("analysis") or {}).get("status"),
+        "analysis_error": (d.get("analysis") or {}).get("error"),
+        "ocr_error": (d.get("ocr") or {}).get("error"),
         "summary": findings.get("summary") or None,
         "message": docs_pipeline.PATIENT_MESSAGE.get(d.get("status"), ""),
     }

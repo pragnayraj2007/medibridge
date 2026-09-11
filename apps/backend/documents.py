@@ -122,35 +122,52 @@ Allowed danger_signs keys:
 {vocab}"""
 
 
+def _gemini_models() -> list[str]:
+    """Configured model first, then stable fallbacks (used only if a model name is rejected)."""
+    first = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    return list(dict.fromkeys([first, "gemini-2.5-flash", "gemini-flash-latest"]))
+
+
 def analyze(data: bytes, mime: str, ocr_text: str, doc_type: str | None) -> dict:
     key = os.getenv("GEMINI_API_KEY")
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     if not key:
         return {"status": "not_configured", "model": None, "findings": None}
     hint = f"The patient labelled it: {doc_type}." if doc_type else ""
     if ocr_text:
         hint += f"\nOCR text (may contain errors; the image is authoritative):\n{ocr_text[:6000]}"
     prompt = GEMINI_PROMPT.format(ocr_hint=hint, vocab="\n".join(f"- {k}: {v}" for k, v in VOCABULARY.items()))
-    try:
-        r = httpx.post(
-            GEMINI_URL.format(model=model),
-            headers={"x-goog-api-key": key},
-            json={
-                "contents": [{"parts": [{"text": prompt},
-                                        {"inline_data": {"mime_type": mime, "data": base64.b64encode(data).decode()}}]}],
-                "generationConfig": {"temperature": 0.1, "responseMimeType": "application/json"},
-            },
-            timeout=30,
-        )
-        r.raise_for_status()
-        parts = r.json()["candidates"][0]["content"]["parts"]
-        text = "".join(p.get("text", "") for p in parts)
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        raw = json.loads(match.group(0) if match else text)
-        return {"status": "done", "model": model, "findings": clean_findings(raw)}
-    except Exception as e:  # timeout, quota, safety block, invalid JSON
-        log.warning("Gemini analysis failed: %s", type(e).__name__)
-        return {"status": "failed", "model": model, "findings": None, "error": type(e).__name__}
+    body = {
+        "contents": [{"parts": [{"text": prompt},
+                                {"inline_data": {"mime_type": mime, "data": base64.b64encode(data).decode()}}]}],
+        "generationConfig": {"temperature": 0.1, "responseMimeType": "application/json"},
+    }
+    error, model = "unknown", None
+    for model in _gemini_models():
+        try:
+            r = httpx.post(GEMINI_URL.format(model=model), headers={"x-goog-api-key": key}, json=body, timeout=30)
+            if r.status_code == 404:  # model name not available for this key: try the next one
+                error = "HTTP 404 (model not found)"
+                log.warning("Gemini model %s not found", model)
+                continue
+            if r.status_code >= 400:
+                error = f"HTTP {r.status_code}"
+                log.warning("Gemini analysis failed: HTTP %s %s", r.status_code, r.text[:300])
+                break
+            candidates = r.json().get("candidates") or []
+            if not candidates:
+                error = "no candidates (blocked or empty)"
+                log.warning("Gemini returned no candidates: %s", r.text[:300])
+                break
+            parts = candidates[0].get("content", {}).get("parts") or []
+            text = "".join(p.get("text", "") for p in parts)
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            raw = json.loads(match.group(0) if match else text)
+            return {"status": "done", "model": model, "findings": clean_findings(raw)}
+        except Exception as e:  # timeout, network, invalid JSON
+            error = type(e).__name__
+            log.warning("Gemini analysis failed: %s", error)
+            break
+    return {"status": "failed", "model": model, "findings": None, "error": error}
 
 
 def _strs(v, limit: int = 30) -> list[str]:

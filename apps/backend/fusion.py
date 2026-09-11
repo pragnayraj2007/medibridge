@@ -57,8 +57,9 @@ def build_context(profile: dict, intake_patient: dict, extraction: dict, message
             "name": profile.get("name"),
             "age": intake_patient.get("age", profile.get("age")),
             "sex": intake_patient.get("sex") or profile.get("sex"),
-            "pregnancy_status": profile.get("pregnancy_status") or "unknown",
-            "pregnant_this_visit": intake_patient.get("pregnant"),
+            # Pregnancy only where it can apply, so summaries don't mention it for everyone
+            "pregnancy_status": (profile.get("pregnancy_status") or "unknown") if (intake_patient.get("sex") or profile.get("sex")) != "male" else None,
+            "pregnant_this_visit": intake_patient.get("pregnant") if (intake_patient.get("sex") or profile.get("sex")) != "male" else None,
         },
         "current": {
             "source": f"patient conversation ({extraction.get('source', 'rules')} extraction)",

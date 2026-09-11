@@ -75,6 +75,8 @@ export type DocumentDetail = {
   status: 'processed' | 'partial' | 'empty' | 'failed'
   ocr_status: string | null
   analysis_status: string | null
+  analysis_error?: string | null
+  ocr_error?: string | null
   summary: string | null
   findings: DocFindings | null
   ocr_text: string | null
