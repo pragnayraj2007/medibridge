@@ -48,6 +48,7 @@ def modal(args: list[str], env: dict, hide: str | None = None) -> str:
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # Modal prints emoji; Windows consoles are cp1252
     s = read_secrets()
     if not (s.get("MODAL_TOKEN_ID") and s.get("MODAL_TOKEN_SECRET")):
         print("MODAL_TOKEN_ID / MODAL_TOKEN_SECRET missing from apps/backend/local-secrets.txt")
