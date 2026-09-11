@@ -42,3 +42,10 @@ export const S = {
     backgroundColor: '#EEF5FF',
   },
 }
+
+// Safety Engine urgency classes (not diagnoses)
+export const TRIAGE = {
+  RED: { color: '#D32F2F', text: '#B71C1C', bg: '#FFEBEE', label: 'Urgent' },
+  YELLOW: { color: '#F9A825', text: '#F57F17', bg: '#FFFDE7', label: 'Priority' },
+  GREEN: { color: '#43A047', text: '#2E7D32', bg: '#E8F5E9', label: 'Routine' },
+} as const

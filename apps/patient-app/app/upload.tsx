@@ -5,8 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
 import { C, S } from '../constants/theme'
+import { useIntake } from '../lib/intake'
 
-type DocFile = { name: string; size: string; type: string }
 
 const DOC_TYPES = [
   { icon: 'document-text-outline', label: 'Prescription', color: '#1565C0' },
@@ -17,11 +17,10 @@ const DOC_TYPES = [
 
 export default function Upload() {
   const router = useRouter()
-  const [files, setFiles] = useState<DocFile[]>([
-    { name: 'blood_test_june.pdf', size: '1.2 MB', type: 'Lab Report' },
-  ])
+  const { documents: files, update } = useIntake()
+  const [note, setNote] = useState(false)
 
-  const removeFile = (i: number) => setFiles(f => f.filter((_, idx) => idx !== i))
+  const removeFile = (i: number) => update(s => ({ documents: s.documents.filter((_, idx) => idx !== i) }))
 
   return (
     <SafeAreaView style={S.screen}>
@@ -41,10 +40,11 @@ export default function Upload() {
         <Text style={styles.subtitle}>Share any recent medical records to help your doctor prepare</Text>
 
         {/* Drop zone */}
-        <TouchableOpacity style={styles.dropZone}>
+        <TouchableOpacity style={styles.dropZone} onPress={() => setNote(true)}>
           <Ionicons name="cloud-upload-outline" size={32} color={C.primary} />
           <Text style={styles.dropTitle}>Tap to upload</Text>
           <Text style={styles.dropSub}>PDF, JPG, PNG · Max 10MB each</Text>
+          {note && <Text style={styles.dropNote}>Document reading (OCR) arrives in the next update — tap Continue for now.</Text>}
         </TouchableOpacity>
 
         {/* Doc type pills */}
@@ -70,7 +70,7 @@ export default function Upload() {
                   </View>
                   <View style={styles.fileMeta}>
                     <Text style={styles.fileName} numberOfLines={1}>{f.name}</Text>
-                    <Text style={styles.fileSize}>{f.type} · {f.size}</Text>
+                    <Text style={styles.fileSize}>{f.type ?? 'Document'}</Text>
                   </View>
                   <TouchableOpacity onPress={() => removeFile(i)}>
                     <Ionicons name="close-circle" size={22} color={C.textGray} />
@@ -110,6 +110,7 @@ const styles = StyleSheet.create({
   dropZone: { borderWidth: 2, borderColor: C.primary, borderStyle: 'dashed', borderRadius: 20, padding: 32, alignItems: 'center', gap: 8, backgroundColor: C.primaryBg, marginBottom: 20 },
   dropTitle: { fontSize: 16, fontWeight: '700', color: C.primary },
   dropSub: { fontSize: 12, color: C.textGray },
+  dropNote: { fontSize: 12, color: C.textMid, textAlign: 'center', marginTop: 6 },
   sectionLabel: { fontSize: 13, fontWeight: '700', color: C.textDark, marginBottom: 10 },
   typeRow: { gap: 10, marginBottom: 20 },
   typePill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.white, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.border },

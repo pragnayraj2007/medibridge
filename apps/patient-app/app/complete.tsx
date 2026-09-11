@@ -4,27 +4,36 @@ import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { C, S } from '../constants/theme'
-
-const SUMMARY_ITEMS = [
-  { icon: 'chatbubbles-outline', label: 'AI conversation', value: '12 responses' },
-  { icon: 'document-text-outline', label: 'Documents uploaded', value: '1 file' },
-  { icon: 'medkit-outline', label: 'Symptoms captured', value: '3 symptoms' },
-  { icon: 'shield-checkmark-outline', label: 'Safety check', value: 'Passed' },
-]
+import { useIntake } from '../lib/intake'
 
 export default function Complete() {
   const router = useRouter()
+  const { result, reset } = useIntake()
+
+  const answers = result?.messages.filter(m => m.role === 'patient').length ?? 0
+  const docs = result?.documents.length ?? 0
+  const findings = result?.triage.reasons.length ?? 0
+  const items = [
+    { icon: 'chatbubbles-outline', label: 'Answers given', value: String(answers) },
+    { icon: 'document-text-outline', label: 'Documents uploaded', value: String(docs) },
+    { icon: 'medkit-outline', label: 'Safety findings', value: findings ? String(findings) : 'None' },
+    { icon: 'shield-checkmark-outline', label: 'Safety check', value: result ? 'Done' : '—' },
+  ]
+
+  const home = () => {
+    reset()
+    router.replace('/')
+  }
+
   return (
     <SafeAreaView style={S.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Confetti placeholder + star */}
         <View style={styles.starWrap}>
           <View style={styles.starOuter}>
             <View style={styles.starInner}>
               <Ionicons name="star" size={48} color={C.white} />
             </View>
           </View>
-          {/* Decorative dots */}
           {[...Array(6)].map((_, i) => (
             <View key={i} style={[styles.confettiDot, { top: 10 + Math.sin(i) * 40, left: 40 + i * 24, backgroundColor: i % 2 === 0 ? C.primary : C.green }]} />
           ))}
@@ -32,14 +41,13 @@ export default function Complete() {
 
         <Text style={styles.title}>You're All Set! 🎉</Text>
         <Text style={styles.subtitle}>
-          Great job completing your health intake. Your doctor is now fully prepared for your visit.
+          Thank you for completing your health intake. Your doctor will have your summary before your visit.
         </Text>
 
-        {/* Summary card */}
         <View style={[S.card, styles.summaryCard]}>
           <Text style={styles.summaryTitle}>What We Collected</Text>
-          {SUMMARY_ITEMS.map((item, i) => (
-            <View key={i} style={styles.summaryRow}>
+          {items.map(item => (
+            <View key={item.label} style={styles.summaryRow}>
               <View style={styles.summaryIcon}>
                 <Ionicons name={item.icon as any} size={16} color={C.primary} />
               </View>
@@ -49,24 +57,11 @@ export default function Complete() {
           ))}
         </View>
 
-        {/* Doctor note */}
-        <View style={styles.doctorCard}>
-          <View style={styles.doctorAvatar}>
-            <Ionicons name="person" size={20} color={C.white} />
-          </View>
-          <View style={styles.doctorInfo}>
-            <Text style={styles.doctorName}>Dr. Priya Nair</Text>
-            <Text style={styles.doctorSub}>MBBS, MD · Cardiology</Text>
-            <Text style={styles.doctorReady}>✓ Has reviewed your summary</Text>
-          </View>
-        </View>
-
-        {/* What's next */}
         <View style={styles.nextBox}>
           <Text style={styles.nextTitle}>What happens next?</Text>
           <View style={styles.nextStep}>
             <View style={[styles.nextNum, { backgroundColor: C.primary }]}><Text style={styles.nextNumText}>1</Text></View>
-            <Text style={styles.nextText}>Doctor reviews your AI-generated summary</Text>
+            <Text style={styles.nextText}>Your doctor reviews your summary</Text>
           </View>
           <View style={styles.nextStep}>
             <View style={[styles.nextNum, { backgroundColor: C.green }]}><Text style={styles.nextNumText}>2</Text></View>
@@ -74,11 +69,11 @@ export default function Complete() {
           </View>
           <View style={styles.nextStep}>
             <View style={[styles.nextNum, { backgroundColor: '#8E24AA' }]}><Text style={styles.nextNumText}>3</Text></View>
-            <Text style={styles.nextText}>Doctor focuses on care, not paperwork</Text>
+            <Text style={styles.nextText}>Tell staff straight away if you feel worse while waiting</Text>
           </View>
         </View>
 
-        <TouchableOpacity style={[S.btn, { width: '100%', marginTop: 20 }]} onPress={() => router.push('/')}>
+        <TouchableOpacity style={[S.btn, { width: '100%', marginTop: 20 }]} onPress={home}>
           <Ionicons name="home-outline" size={18} color={C.white} />
           <Text style={S.btnText}>Back to Home</Text>
         </TouchableOpacity>
@@ -103,12 +98,6 @@ const styles = StyleSheet.create({
   summaryIcon: { width: 30, height: 30, borderRadius: 8, backgroundColor: C.primaryBg, alignItems: 'center', justifyContent: 'center' },
   summaryLabel: { flex: 1, fontSize: 13, color: C.textGray },
   summaryValue: { fontSize: 13, fontWeight: '700', color: C.textDark },
-  doctorCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.white, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border, width: '100%', marginBottom: 20 },
-  doctorAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
-  doctorInfo: { flex: 1 },
-  doctorName: { fontSize: 15, fontWeight: '700', color: C.textDark },
-  doctorSub: { fontSize: 12, color: C.textGray },
-  doctorReady: { fontSize: 12, color: C.green, fontWeight: '600', marginTop: 2 },
   nextBox: { backgroundColor: C.white, borderRadius: 16, padding: 16, width: '100%', borderWidth: 1, borderColor: C.border, gap: 14 },
   nextTitle: { fontSize: 14, fontWeight: '700', color: C.textDark },
   nextStep: { flexDirection: 'row', alignItems: 'center', gap: 12 },

@@ -1,51 +1,58 @@
+'use client'
+
 import Link from 'next/link'
+import { useEffect, useMemo, useState } from 'react'
+import { API_URL, Case, complaint, getCases, Level, LEVEL_RANK, patientName, STATUS_LABEL, timeAgo } from '@/lib/api'
 
-const cases = [
-  {
-    id: 'P001', name: 'Ravi Kumar', age: 45, gender: 'M',
-    symptoms: 'Chest discomfort, shortness of breath',
-    triage: 'YELLOW', submitted: '10 min ago', status: 'Pending review',
-  },
-  {
-    id: 'P002', name: 'Sunita Devi', age: 32, gender: 'F',
-    symptoms: 'High fever, severe headache, stiff neck',
-    triage: 'RED', submitted: '24 min ago', status: 'Urgent',
-  },
-  {
-    id: 'P003', name: 'Arjun Sharma', age: 67, gender: 'M',
-    symptoms: 'Mild cough, runny nose',
-    triage: 'GREEN', submitted: '1 hr ago', status: 'Reviewed',
-  },
-  {
-    id: 'P004', name: 'Meena Patel', age: 28, gender: 'F',
-    symptoms: 'Abdominal pain (lower right), nausea',
-    triage: 'YELLOW', submitted: '2 hr ago', status: 'Pending review',
-  },
-  {
-    id: 'P005', name: 'Vikram Singh', age: 55, gender: 'M',
-    symptoms: 'Sudden vision loss (right eye), dizziness',
-    triage: 'RED', submitted: '3 hr ago', status: 'Urgent',
-  },
-]
-
-const triageStyle: Record<string, string> = {
+const triageStyle: Record<Level, string> = {
   RED: 'bg-red-100 text-red-700 border-red-200',
   YELLOW: 'bg-yellow-100 text-yellow-700 border-yellow-200',
   GREEN: 'bg-green-100 text-green-700 border-green-200',
 }
 
-const triageDot: Record<string, string> = {
+const triageDot: Record<Level, string> = {
   RED: 'bg-red-500',
   YELLOW: 'bg-yellow-400',
   GREEN: 'bg-green-500',
 }
 
 export default function Dashboard() {
+  const [cases, setCases] = useState<Case[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState(false)
+  const [level, setLevel] = useState<'' | Level>('')
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    const load = () =>
+      getCases()
+        .then(data => { if (alive) { setCases(data); setError(false) } })
+        .catch(() => { if (alive) setError(true) })
+        .finally(() => { if (alive) setLoaded(true) })
+    load()
+    const t = setInterval(load, 5000) // new patient submissions appear automatically
+    return () => { alive = false; clearInterval(t) }
+  }, [])
+
+  const open = cases.filter(c => c.status !== 'reviewed')
   const counts = {
-    RED: cases.filter(c => c.triage === 'RED').length,
-    YELLOW: cases.filter(c => c.triage === 'YELLOW').length,
-    GREEN: cases.filter(c => c.triage === 'GREEN').length,
+    RED: open.filter(c => c.triage_level === 'RED').length,
+    YELLOW: open.filter(c => c.triage_level === 'YELLOW').length,
+    GREEN: open.filter(c => c.triage_level === 'GREEN').length,
   }
+
+  // Open cases first, then most urgent, then newest
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return cases
+      .filter(c => !level || c.triage_level === level)
+      .filter(c => !q || `${patientName(c)} ${complaint(c)}`.toLowerCase().includes(q))
+      .sort((a, b) =>
+        Number(a.status === 'reviewed') - Number(b.status === 'reviewed')
+        || LEVEL_RANK[a.triage_level] - LEVEL_RANK[b.triage_level]
+        || b.created_at.localeCompare(a.created_at))
+  }, [cases, level, search])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -61,28 +68,38 @@ export default function Dashboard() {
           <span className="text-gray-300">|</span>
           <span className="text-sm text-gray-500">Doctor Dashboard</span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-500">Dr. Ananya Rao</span>
-          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm">A</div>
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          <span className={`w-2 h-2 rounded-full ${error ? 'bg-red-500' : 'bg-green-500'}`} />
+          {error ? 'Offline' : 'Live'}
         </div>
       </header>
 
       <main className="px-8 py-6 max-w-6xl mx-auto">
-        {/* Summary cards */}
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            Can&apos;t reach the backend at {API_URL}. Start it with <code>uvicorn main:app</code> in apps/backend.
+          </div>
+        )}
+
+        {/* Summary cards (open cases) */}
         <div className="grid grid-cols-3 gap-4 mb-6">
-          {[
+          {([
             { label: 'Urgent', level: 'RED', color: 'border-red-300 bg-red-50', text: 'text-red-700', count: counts.RED },
             { label: 'Needs Attention', level: 'YELLOW', color: 'border-yellow-300 bg-yellow-50', text: 'text-yellow-700', count: counts.YELLOW },
             { label: 'Stable', level: 'GREEN', color: 'border-green-300 bg-green-50', text: 'text-green-700', count: counts.GREEN },
-          ].map(({ label, level, color, text, count }) => (
-            <div key={level} className={`border rounded-xl p-5 ${color}`}>
+          ] as const).map(({ label, level: l, color, text, count }) => (
+            <button
+              key={l}
+              onClick={() => setLevel(level === l ? '' : l)}
+              className={`text-left border rounded-xl p-5 ${color} ${level === l ? 'ring-2 ring-blue-500' : ''}`}
+            >
               <div className="flex items-center gap-2 mb-2">
-                <div className={`w-2.5 h-2.5 rounded-full ${triageDot[level]}`} />
-                <span className={`text-xs font-semibold uppercase tracking-wide ${text}`}>{level}</span>
+                <div className={`w-2.5 h-2.5 rounded-full ${triageDot[l]}`} />
+                <span className={`text-xs font-semibold uppercase tracking-wide ${text}`}>{l}</span>
               </div>
               <div className={`text-3xl font-bold ${text}`}>{count}</div>
-              <div className="text-xs text-gray-500 mt-1">{label}</div>
-            </div>
+              <div className="text-xs text-gray-500 mt-1">{label} · open</div>
+            </button>
           ))}
         </div>
 
@@ -93,14 +110,20 @@ export default function Dashboard() {
             <div className="flex items-center gap-3">
               <input
                 type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
                 placeholder="Search patients..."
                 className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-600 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 w-52"
               />
-              <select className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-600 focus:outline-none">
-                <option>All triage</option>
-                <option>RED</option>
-                <option>YELLOW</option>
-                <option>GREEN</option>
+              <select
+                value={level}
+                onChange={e => setLevel(e.target.value as '' | Level)}
+                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-600 focus:outline-none"
+              >
+                <option value="">All triage</option>
+                <option value="RED">RED</option>
+                <option value="YELLOW">YELLOW</option>
+                <option value="GREEN">GREEN</option>
               </select>
             </div>
           </div>
@@ -109,7 +132,7 @@ export default function Dashboard() {
             <thead>
               <tr className="text-xs text-gray-400 uppercase tracking-wide border-b border-gray-100">
                 <th className="text-left px-6 py-3 font-medium">Patient</th>
-                <th className="text-left px-6 py-3 font-medium">Symptoms</th>
+                <th className="text-left px-6 py-3 font-medium">Complaint</th>
                 <th className="text-left px-6 py-3 font-medium">Triage</th>
                 <th className="text-left px-6 py-3 font-medium">Submitted</th>
                 <th className="text-left px-6 py-3 font-medium">Status</th>
@@ -117,42 +140,50 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {cases.map((c) => (
-                <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+              {rows.map(c => (
+                <tr key={c.id} className={`hover:bg-gray-50 transition-colors ${c.status === 'reviewed' ? 'opacity-60' : ''}`}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 font-semibold text-xs flex-shrink-0">
-                        {c.name.charAt(0)}
+                        {patientName(c).charAt(0)}
                       </div>
                       <div>
-                        <div className="font-medium text-gray-900 text-sm">{c.name}</div>
-                        <div className="text-xs text-gray-400">{c.age}y · {c.gender} · {c.id}</div>
+                        <div className="font-medium text-gray-900 text-sm">{patientName(c)}</div>
+                        <div className="text-xs text-gray-400">
+                          {c.patient.age != null ? `${c.patient.age}y` : 'age ?'}
+                          {c.patient.sex ? ` · ${c.patient.sex[0].toUpperCase()}` : ''}
+                          {c.patient.pregnant ? ' · pregnant' : ''}
+                        </div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-gray-600 line-clamp-1">{c.symptoms}</span>
+                  <td className="px-6 py-4 max-w-xs">
+                    <span className="text-sm text-gray-600 line-clamp-1">{complaint(c)}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold border rounded-full px-2.5 py-1 ${triageStyle[c.triage]}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${triageDot[c.triage]}`} />
-                      {c.triage}
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold border rounded-full px-2.5 py-1 ${triageStyle[c.triage_level]}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${triageDot[c.triage_level]}`} />
+                      {c.triage_level}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-400">{c.submitted}</td>
+                  <td className="px-6 py-4 text-sm text-gray-400">{timeAgo(c.created_at)}</td>
                   <td className="px-6 py-4">
-                    <span className="text-xs text-gray-500">{c.status}</span>
+                    <span className="text-xs text-gray-500">{STATUS_LABEL[c.status]}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <Link
-                      href={`/patient/${c.id}`}
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                    >
+                    <Link href={`/patient/${c.id}`} className="text-blue-600 hover:text-blue-800 text-sm font-medium">
                       View →
                     </Link>
                   </td>
                 </tr>
               ))}
+              {loaded && rows.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-10 text-center text-sm text-gray-400">
+                    {cases.length === 0 ? 'No cases yet. Submit one from the patient app.' : 'No cases match your filters.'}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

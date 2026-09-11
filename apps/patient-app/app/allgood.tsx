@@ -1,66 +1,60 @@
-// Screen 9: All Good (green shield)
+// Screen 9: Submitted — wording and colour follow the Safety Engine result
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { C, S } from '../constants/theme'
+import { C, S, TRIAGE } from '../constants/theme'
+import { useIntake } from '../lib/intake'
 
 export default function AllGood() {
   const router = useRouter()
+  const { result } = useIntake()
+  const level = result?.triage_level ?? 'GREEN'
+  const t = TRIAGE[level]
+  const red = level === 'RED'
+  const submitted = result ? new Date(result.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'
+
   return (
     <SafeAreaView style={S.screen}>
       <View style={styles.container}>
-        {/* Shield animation placeholder */}
-        <View style={styles.outerRing}>
-          <View style={styles.innerRing}>
-            <View style={styles.shieldCircle}>
-              <Ionicons name="shield-checkmark" size={52} color={C.white} />
+        <View style={[styles.outerRing, { backgroundColor: t.bg }]}>
+          <View style={[styles.innerRing, { backgroundColor: red ? '#FFCDD2' : '#C8E6C9' }]}>
+            <View style={[styles.shieldCircle, { backgroundColor: red ? t.color : C.green }]}>
+              <Ionicons name={red ? 'alert' : 'shield-checkmark'} size={52} color={C.white} />
             </View>
           </View>
         </View>
 
-        <Text style={styles.title}>Information Submitted!</Text>
-        <Text style={styles.subtitle}>
-          Your health information has been securely sent to your doctor. They'll review it before your appointment.
+        <Text style={styles.title}>{red ? 'Please Tell Staff Now' : 'Information Submitted!'}</Text>
+        <Text style={[styles.subtitle, red && { color: t.text, fontWeight: '600' }]}>
+          {result?.guidance ?? 'Your health information has been sent to your doctor.'}
         </Text>
 
-        {/* Info cards */}
         <View style={styles.cards}>
+          <View style={styles.infoCard}>
+            <Ionicons name="document-text-outline" size={20} color={C.primary} />
+            <View>
+              <Text style={styles.infoTitle}>Case ID</Text>
+              <Text style={styles.infoValue}>#{result ? result.id.slice(0, 8).toUpperCase() : '—'}</Text>
+            </View>
+          </View>
           <View style={styles.infoCard}>
             <Ionicons name="time-outline" size={20} color={C.primary} />
             <View>
-              <Text style={styles.infoTitle}>Estimated Wait</Text>
-              <Text style={styles.infoValue}>~15 minutes</Text>
-            </View>
-          </View>
-          <View style={styles.infoCard}>
-            <Ionicons name="location-outline" size={20} color={C.primary} />
-            <View>
-              <Text style={styles.infoTitle}>Queue Position</Text>
-              <Text style={styles.infoValue}>#3 in line</Text>
+              <Text style={styles.infoTitle}>Submitted</Text>
+              <Text style={styles.infoValue}>{submitted}</Text>
             </View>
           </View>
         </View>
 
-        {/* Triage */}
-        <View style={styles.triageBadge}>
-          <View style={styles.triageDot} />
-          <Text style={styles.triageText}>Priority: YELLOW · Moderate</Text>
-          <Ionicons name="information-circle-outline" size={16} color={C.textGray} />
+        <View style={[styles.triageBadge, { backgroundColor: t.bg, borderColor: t.color }]}>
+          <View style={[styles.triageDot, { backgroundColor: t.color }]} />
+          <Text style={[styles.triageText, { color: t.text }]}>Priority: {level} · {t.label}</Text>
         </View>
-
-        <Text style={styles.note}>
-          💡 You can relax. The doctor has everything they need. We'll notify you when it's your turn.
-        </Text>
 
         <TouchableOpacity style={[S.btn, { width: '100%', marginTop: 20 }]} onPress={() => router.push('/complete')}>
-          <Text style={S.btnText}>See Full Summary</Text>
+          <Text style={S.btnText}>Continue</Text>
           <Ionicons name="arrow-forward" size={18} color={C.white} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.homeBtn}>
-          <Ionicons name="home-outline" size={16} color={C.textGray} />
-          <Text style={styles.homeBtnText}>Return to Home</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -69,19 +63,16 @@ export default function AllGood() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  outerRing: { width: 180, height: 180, borderRadius: 90, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center', marginBottom: 32 },
-  innerRing: { width: 144, height: 144, borderRadius: 72, backgroundColor: '#C8E6C9', alignItems: 'center', justifyContent: 'center' },
-  shieldCircle: { width: 108, height: 108, borderRadius: 54, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center' },
+  outerRing: { width: 180, height: 180, borderRadius: 90, alignItems: 'center', justifyContent: 'center', marginBottom: 32 },
+  innerRing: { width: 144, height: 144, borderRadius: 72, alignItems: 'center', justifyContent: 'center' },
+  shieldCircle: { width: 108, height: 108, borderRadius: 54, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 28, fontWeight: '800', color: C.textDark, textAlign: 'center', marginBottom: 12 },
   subtitle: { fontSize: 15, color: C.textGray, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
   cards: { flexDirection: 'row', gap: 12, width: '100%', marginBottom: 20 },
   infoCard: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.white, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border },
   infoTitle: { fontSize: 11, color: C.textGray },
   infoValue: { fontSize: 14, fontWeight: '700', color: C.textDark },
-  triageBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFDE7', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: '#F9A825', marginBottom: 20 },
-  triageDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#F9A825' },
-  triageText: { fontSize: 13, fontWeight: '600', color: '#F57F17' },
-  note: { fontSize: 13, color: C.textGray, textAlign: 'center', lineHeight: 20, backgroundColor: C.primaryBg, borderRadius: 12, padding: 14 },
-  homeBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 16 },
-  homeBtnText: { color: C.textGray, fontSize: 14 },
+  triageBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1 },
+  triageDot: { width: 8, height: 8, borderRadius: 4 },
+  triageText: { fontSize: 13, fontWeight: '600' },
 })

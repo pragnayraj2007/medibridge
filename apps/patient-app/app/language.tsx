@@ -3,8 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { useState } from 'react'
 import { C, S } from '../constants/theme'
+import { useIntake } from '../lib/intake'
 
 const LANGS = [
   { code: 'en', label: 'English', native: 'English' },
@@ -17,7 +17,8 @@ const LANGS = [
 
 export default function Language() {
   const router = useRouter()
-  const [selected, setSelected] = useState('en')
+  const { language: selected, update } = useIntake()
+  const setSelected = (language: string) => update({ language })
 
   return (
     <SafeAreaView style={S.screen}>

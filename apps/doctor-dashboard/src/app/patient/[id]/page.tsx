@@ -1,41 +1,14 @@
+'use client'
+
 import Link from 'next/link'
+import { useParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { Case, getCase, Level, patientName, setStatus, Status, STATUS_LABEL } from '@/lib/api'
 
-// Mock patient data — replaced by API in Phase 4
-const patient = {
-  id: 'P001',
-  name: 'Ravi Kumar',
-  age: 45,
-  gender: 'Male',
-  phone: '+91 98765 43210',
-  submitted: 'Sep 11, 2026 · 10:42 AM',
-  triage: 'YELLOW' as 'RED' | 'YELLOW' | 'GREEN',
-
-  symptoms: [
-    { label: 'Chief complaint', value: 'Chest discomfort and shortness of breath' },
-    { label: 'Duration', value: '2 days' },
-    { label: 'Severity', value: '6 / 10' },
-    { label: 'Associated symptoms', value: 'Mild fatigue, occasional dizziness' },
-  ],
-
-  history: [
-    { label: 'Past conditions', value: 'Hypertension (diagnosed 2019)' },
-    { label: 'Previous hospitalisations', value: 'None reported' },
-    { label: 'Allergies', value: 'Penicillin' },
-    { label: 'Current medications', value: 'Amlodipine 5mg (daily)' },
-  ],
-
-  aiSummary: 'Patient presents with a 2-day history of chest discomfort and shortness of breath, severity rated 6/10, with associated fatigue and dizziness. Background of hypertension on Amlodipine. Symptom pattern and cardiovascular risk profile warrant timely clinical evaluation to rule out acute coronary syndrome or other cardiac aetiology. No red-flag emergency symptoms reported at this time.',
-
-  safetyFlags: [
-    'Cardiovascular risk factor: hypertension',
-    'Chest symptoms + shortness of breath — cardiac aetiology not excluded',
-  ],
-}
-
-const triageConfig = {
-  RED: { bar: 'bg-red-600', badge: 'bg-red-100 text-red-700 border-red-200', dot: 'bg-red-500', label: 'URGENT — Immediate attention required' },
-  YELLOW: { bar: 'bg-yellow-500', badge: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-400', label: 'YELLOW — Timely attention required' },
-  GREEN: { bar: 'bg-green-600', badge: 'bg-green-100 text-green-700 border-green-200', dot: 'bg-green-500', label: 'GREEN — No immediate danger' },
+const triageConfig: Record<Level, { bar: string; badge: string; dot: string; label: string }> = {
+  RED: { bar: 'bg-red-600', badge: 'bg-red-100 text-red-700 border-red-200', dot: 'bg-red-500', label: 'Immediate attention required' },
+  YELLOW: { bar: 'bg-yellow-500', badge: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-400', label: 'Timely attention required' },
+  GREEN: { bar: 'bg-green-600', badge: 'bg-green-100 text-green-700 border-green-200', dot: 'bg-green-500', label: 'No danger signs found' },
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -49,17 +22,47 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="flex gap-4 py-2 border-b border-gray-50 last:border-0">
       <span className="text-xs text-gray-400 w-44 flex-shrink-0 pt-0.5">{label}</span>
-      <span className="text-sm text-gray-800">{value}</span>
+      <span className="text-sm text-gray-800">{value || '—'}</span>
     </div>
   )
 }
 
+const list = (xs: string[]) => (xs.length ? xs.join(', ') : null)
+const humanFlag = (f: string) => f.replace(/_/g, ' ')
+
 export default function PatientDetail() {
-  const tc = triageConfig[patient.triage]
+  const { id } = useParams<{ id: string }>()
+  const [c, setCase] = useState<Case | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    getCase(id).then(setCase).catch(e => setError(String(e.message).includes('404') ? 'Case not found.' : "Can't reach the backend."))
+  }, [id])
+
+  const update = async (status: Status) => {
+    setSaving(true)
+    try { setCase(await setStatus(id, status)) } catch { setError('Could not update status.') } finally { setSaving(false) }
+  }
+
+  if (!c) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-3 text-sm text-gray-500">
+        {error ?? 'Loading…'}
+        <Link href="/" className="text-blue-600 hover:underline">← Back to dashboard</Link>
+      </div>
+    )
+  }
+
+  const tc = triageConfig[c.triage_level]
+  const p = c.patient
+  const x = c.extraction
+  const flags = Array.from(new Set([...x.keyword_flags, ...x.llm_flags]))
+  const submitted = new Date(c.created_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -75,102 +78,132 @@ export default function PatientDetail() {
           <span className="text-gray-300">|</span>
           <Link href="/" className="text-sm text-blue-600 hover:underline">Dashboard</Link>
           <span className="text-gray-300">/</span>
-          <span className="text-sm text-gray-500">{patient.name}</span>
+          <span className="text-sm text-gray-500">{patientName(c)}</span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-500">Dr. Ananya Rao</span>
-          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm">A</div>
-        </div>
+        <span className="text-xs text-gray-400">Status: {STATUS_LABEL[c.status]}</span>
       </header>
 
       {/* Triage bar */}
       <div className={`${tc.bar} px-8 py-3 flex items-center justify-between`}>
         <div className="flex items-center gap-3 text-white">
-          <span className="font-bold text-sm">{patient.triage}</span>
+          <span className="font-bold text-sm">{c.triage_level}</span>
           <span className="text-white/70 text-sm">·</span>
-          <span className="text-white/90 text-sm">{tc.label.split('—')[1]?.trim()}</span>
+          <span className="text-white/90 text-sm">{tc.label}</span>
         </div>
-        <span className="text-white/70 text-xs">Submitted {patient.submitted}</span>
+        <span className="text-white/70 text-xs">Submitted {submitted}</span>
       </div>
 
       <main className="px-8 py-6 max-w-6xl mx-auto">
+        {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
         <div className="grid grid-cols-3 gap-6">
-
           {/* Left col */}
           <div className="col-span-1 space-y-4">
             {/* Patient card */}
             <div className="bg-white border border-gray-200 rounded-xl p-5">
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-lg">
-                  {patient.name.charAt(0)}
+                  {patientName(c).charAt(0)}
                 </div>
                 <div>
-                  <h2 className="font-bold text-gray-900">{patient.name}</h2>
-                  <p className="text-sm text-gray-400">{patient.age}y · {patient.gender} · {patient.id}</p>
+                  <h2 className="font-bold text-gray-900">{patientName(c)}</h2>
+                  <p className="text-sm text-gray-400">
+                    {p.age != null ? `${p.age}y` : 'age unknown'}{p.sex ? ` · ${p.sex}` : ''} · #{c.id.slice(0, 8).toUpperCase()}
+                  </p>
                 </div>
               </div>
               <div className="text-sm text-gray-500 space-y-1">
-                <div className="flex gap-2"><span className="text-gray-400 w-16">Phone</span><span>{patient.phone}</span></div>
+                <div className="flex gap-2"><span className="text-gray-400 w-20">Phone</span><span>{p.phone || '—'}</span></div>
+                <div className="flex gap-2"><span className="text-gray-400 w-20">Pregnant</span><span>{p.pregnant ? 'Yes' : p.pregnant === false ? 'No' : '—'}</span></div>
+                <div className="flex gap-2"><span className="text-gray-400 w-20">Language</span><span>{c.language}</span></div>
               </div>
               <div className="mt-4">
                 <span className={`inline-flex items-center gap-2 border rounded-full px-3 py-1 text-xs font-semibold ${tc.badge}`}>
                   <span className={`w-2 h-2 rounded-full ${tc.dot}`} />
-                  {patient.triage}
+                  {c.triage_level}
                 </span>
               </div>
             </div>
 
-            {/* Safety flags */}
-            {patient.safetyFlags.length > 0 && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-                <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-2">Safety Flags</p>
+            {/* Safety Engine */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+              <p className="text-xs font-semibold text-yellow-800 uppercase tracking-wide">Safety Engine</p>
+              <p className="text-[11px] text-yellow-700 mb-3">Deterministic · {c.triage.engine_version} · sets urgency, not diagnosis</p>
+              {c.triage.reasons.length === 0 ? (
+                <p className="text-xs text-yellow-800">No IITT danger criteria met.</p>
+              ) : (
                 <ul className="space-y-1.5">
-                  {patient.safetyFlags.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-xs text-yellow-800">
-                      <span className="mt-0.5">⚠️</span>
-                      <span>{f}</span>
+                  {c.triage.reasons.map(r => (
+                    <li key={r.rule_id} className="flex items-start gap-2 text-xs text-yellow-900">
+                      <span className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${triageConfig[r.level].dot}`} />
+                      <span>{r.label}{r.source !== 'IITT' && <span className="text-yellow-600"> ({r.source})</span>}</span>
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Actions */}
             <div className="space-y-2">
-              <button className="w-full bg-blue-600 text-white font-semibold py-2.5 rounded-xl hover:bg-blue-700 transition-colors text-sm">
-                Mark as Reviewed
+              <button
+                disabled={saving || c.status === 'reviewed'}
+                onClick={() => update('reviewed')}
+                className="w-full bg-blue-600 text-white font-semibold py-2.5 rounded-xl hover:bg-blue-700 transition-colors text-sm disabled:opacity-50"
+              >
+                {c.status === 'reviewed' ? 'Reviewed ✓' : 'Mark as Reviewed'}
               </button>
-              <button className="w-full border border-gray-200 text-gray-600 font-medium py-2.5 rounded-xl hover:bg-gray-50 transition-colors text-sm">
-                Request Follow-up
+              <button
+                disabled={saving || c.status === 'follow_up'}
+                onClick={() => update('follow_up')}
+                className="w-full border border-gray-200 text-gray-600 font-medium py-2.5 rounded-xl hover:bg-gray-50 transition-colors text-sm disabled:opacity-50"
+              >
+                {c.status === 'follow_up' ? 'Follow-up requested ✓' : 'Request Follow-up'}
               </button>
             </div>
           </div>
 
           {/* Right col */}
           <div className="col-span-2 space-y-4">
-
             {/* AI Summary */}
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
               <div className="flex items-center gap-2 mb-3">
-                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
                 <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">AI Clinical Summary</span>
-                <span className="text-xs text-blue-400 ml-auto">AI-assisted · Doctor reviews</span>
+                <span className="text-xs text-blue-400 ml-auto">
+                  {x.source === 'groq' ? `AI-assisted (${x.model}) · Doctor reviews` : 'AI unavailable — rule-based'}
+                </span>
               </div>
-              <p className="text-sm text-gray-700 leading-relaxed">{patient.aiSummary}</p>
+              <p className="text-sm text-gray-700 leading-relaxed">{c.summary || '—'}</p>
             </div>
 
-            {/* Symptoms */}
-            <Section title="Reported Symptoms">
-              {patient.symptoms.map((s) => <Row key={s.label} {...s} />)}
+            <Section title="Extracted Details">
+              <Row label="Symptoms" value={list(x.symptoms)} />
+              <Row label="Duration" value={x.duration} />
+              <Row label="Severity" value={x.severity} />
+              <Row label="Past history" value={list(x.history)} />
+              <Row label="Medications" value={list(x.medications)} />
+              <Row label="Allergies" value={list(x.allergies)} />
+              <Row label="Detected flags" value={flags.length ? flags.map(humanFlag).join(', ') : null} />
             </Section>
 
-            {/* Medical history */}
-            <Section title="Medical History">
-              {patient.history.map((h) => <Row key={h.label} {...h} />)}
-            </Section>
+            {(c.documents.length > 0 || c.vitals) && (
+              <Section title="Documents & Vitals">
+                {c.documents.map(d => <Row key={d.name} label={d.type || 'Document'} value={d.name} />)}
+                {c.vitals && Object.entries(c.vitals).filter(([, v]) => v != null).map(([k, v]) => (
+                  <Row key={k} label={k.toUpperCase()} value={String(v)} />
+                ))}
+              </Section>
+            )}
 
+            <Section title="Intake Conversation">
+              <div className="space-y-2">
+                {c.messages.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === 'patient' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${m.role === 'patient' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                      {m.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
           </div>
         </div>
       </main>

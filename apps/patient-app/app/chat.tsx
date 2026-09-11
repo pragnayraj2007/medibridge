@@ -1,29 +1,56 @@
-// Screen 5: Chat with AI
-import { View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native'
+// Screen 5: Chat with AI — questions come from the backend; every turn gets a live safety check
+import { View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { useState } from 'react'
-import { C, S } from '../constants/theme'
+import { useEffect, useRef, useState } from 'react'
+import { C, S, TRIAGE } from '../constants/theme'
+import { api, Message, SERVER_ERROR } from '../lib/api'
+import { useIntake } from '../lib/intake'
 
-type Msg = { from: 'ai' | 'user'; text: string }
-
-const INIT: Msg[] = [
-  { from: 'ai', text: "Hello! I'm here to help collect your health information before your appointment. This usually takes about 5 minutes. Can you tell me what brings you in today?" },
-]
+const QUICK_REPLIES = ['It started suddenly', 'Mild pain', "It's getting worse", 'I have fever too']
 
 export default function Chat() {
   const router = useRouter()
-  const [msgs, setMsgs] = useState<Msg[]>(INIT)
+  const { patient, language, messages, update } = useIntake()
   const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(false)
+  const [done, setDone] = useState(false)
+  const [urgent, setUrgent] = useState<string | null>(null)
+  const scroll = useRef<ScrollView>(null)
 
-  const send = () => {
-    if (!input.trim()) return
-    const userMsg: Msg = { from: 'user', text: input.trim() }
-    const aiReply: Msg = { from: 'ai', text: "Thank you for sharing that. Could you tell me more about when this started and how severe the pain is on a scale of 1–10?" }
-    setMsgs(m => [...m, userMsg, aiReply])
-    setInput('')
+  const ask = async (history: Message[]) => {
+    setLoading(true)
+    setError(false)
+    try {
+      const res = await api.nextQuestion({ patient, language, messages: history })
+      update({ messages: [...history, { role: 'assistant', text: res.question }] })
+      setDone(res.done)
+      if (res.safety.urgent) setUrgent(res.safety.guidance)
+    } catch {
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
   }
+
+  useEffect(() => {
+    if (messages.length === 0) ask([])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const send = (text: string = input) => {
+    const t = text.trim()
+    if (!t || loading) return
+    setInput('')
+    const history: Message[] = [...messages, { role: 'patient', text: t }]
+    update({ messages: history })
+    ask(history)
+  }
+
+  const answered = messages.some(m => m.role === 'patient')
+  const lastIsPatient = messages[messages.length - 1]?.role === 'patient'
 
   return (
     <SafeAreaView style={S.screen}>
@@ -40,63 +67,97 @@ export default function Chat() {
               <Text style={styles.headerSub}>Step 4 of 8 · Health Assessment</Text>
             </View>
           </View>
-          <TouchableOpacity onPress={() => router.push('/upload')}>
-            <Text style={styles.skipText}>Skip</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Progress */}
         <View style={styles.progressBar}><View style={[styles.progressFill, { width: '50%' }]} /></View>
 
+        {/* Urgent banner (Safety Engine, deterministic) */}
+        {urgent && (
+          <View style={styles.urgent}>
+            <Ionicons name="alert-circle" size={22} color={TRIAGE.RED.color} />
+            <Text style={styles.urgentText}>{urgent}</Text>
+          </View>
+        )}
+
         {/* Messages */}
-        <ScrollView style={styles.msgs} contentContainerStyle={{ padding: 16, gap: 14 }} showsVerticalScrollIndicator={false}>
-          {msgs.map((m, i) => (
-            <View key={i} style={[styles.bubble, m.from === 'user' ? styles.bubbleUser : styles.bubbleAI]}>
-              {m.from === 'ai' && (
+        <ScrollView
+          ref={scroll}
+          style={styles.msgs}
+          contentContainerStyle={{ padding: 16, gap: 14 }}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}
+        >
+          {messages.map((m, i) => (
+            <View key={i} style={[styles.bubble, m.role === 'patient' ? styles.bubbleUser : styles.bubbleAI]}>
+              {m.role === 'assistant' && (
                 <View style={styles.aiBubbleIcon}>
                   <Ionicons name="hardware-chip-outline" size={12} color={C.white} />
                 </View>
               )}
-              <View style={[styles.bubbleInner, m.from === 'user' ? styles.bubbleInnerUser : styles.bubbleInnerAI]}>
-                <Text style={[styles.bubbleText, m.from === 'user' && styles.bubbleTextUser]}>{m.text}</Text>
+              <View style={[styles.bubbleInner, m.role === 'patient' ? styles.bubbleInnerUser : styles.bubbleInnerAI]}>
+                <Text style={[styles.bubbleText, m.role === 'patient' && styles.bubbleTextUser]}>{m.text}</Text>
               </View>
             </View>
           ))}
+          {loading && <ActivityIndicator color={C.primary} style={{ alignSelf: 'flex-start', marginLeft: 32 }} />}
+          {error && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{SERVER_ERROR}</Text>
+              <TouchableOpacity onPress={() => ask(messages)}>
+                <Text style={styles.retry}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </ScrollView>
 
-        {/* Quick replies */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
-          {["It started suddenly", "Mild pain", "It's getting worse", "I have fever too"].map(q => (
-            <TouchableOpacity key={q} style={styles.quickChip} onPress={() => setInput(q)}>
-              <Text style={styles.quickText}>{q}</Text>
+        {!done && (
+          <>
+            {/* Quick replies */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow} keyboardShouldPersistTaps="handled">
+              {QUICK_REPLIES.map(q => (
+                <TouchableOpacity key={q} style={styles.quickChip} onPress={() => send(q)} disabled={loading || lastIsPatient}>
+                  <Text style={styles.quickText}>{q}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Input */}
+            <View style={styles.inputRow}>
+              <TouchableOpacity style={styles.micBtn}>
+                <Ionicons name="mic-outline" size={22} color={C.primary} />
+              </TouchableOpacity>
+              <TextInput
+                style={styles.input}
+                placeholder="Type your response..."
+                placeholderTextColor={C.textGray}
+                value={input}
+                onChangeText={setInput}
+                onSubmitEditing={() => send()}
+                returnKeyType="send"
+                editable={!loading}
+              />
+              <TouchableOpacity style={[styles.sendBtn, loading && { opacity: 0.5 }]} onPress={() => send()} disabled={loading}>
+                <Ionicons name="send" size={18} color={C.white} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
+        {/* Continue */}
+        {done ? (
+          <TouchableOpacity style={[S.btn, { marginHorizontal: 16, marginBottom: 12 }]} onPress={() => router.push('/upload')}>
+            <Text style={S.btnText}>Done answering</Text>
+            <Ionicons name="arrow-forward" size={18} color={C.white} />
+          </TouchableOpacity>
+        ) : (
+          answered && !loading && (
+            <TouchableOpacity style={styles.doneCta} onPress={() => router.push('/upload')}>
+              <Text style={styles.doneCtaText}>Done answering → Continue to document upload</Text>
+              <Ionicons name="arrow-forward" size={14} color={C.primary} />
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Input */}
-        <View style={styles.inputRow}>
-          <TouchableOpacity style={styles.micBtn}>
-            <Ionicons name="mic-outline" size={22} color={C.primary} />
-          </TouchableOpacity>
-          <TextInput
-            style={styles.input}
-            placeholder="Type your response..."
-            placeholderTextColor={C.textGray}
-            value={input}
-            onChangeText={setInput}
-            onSubmitEditing={send}
-            returnKeyType="send"
-          />
-          <TouchableOpacity style={styles.sendBtn} onPress={send}>
-            <Ionicons name="send" size={18} color={C.white} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Done CTA */}
-        <TouchableOpacity style={styles.doneCta} onPress={() => router.push('/upload')}>
-          <Text style={styles.doneCtaText}>Done answering → Continue to document upload</Text>
-          <Ionicons name="arrow-forward" size={14} color={C.primary} />
-        </TouchableOpacity>
+          )
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
@@ -108,9 +169,10 @@ const styles = StyleSheet.create({
   aiAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 15, fontWeight: '700', color: C.textDark },
   headerSub: { fontSize: 11, color: C.textGray },
-  skipText: { color: C.primary, fontWeight: '600', fontSize: 14 },
   progressBar: { height: 4, backgroundColor: C.border, marginHorizontal: 16 },
   progressFill: { height: 4, backgroundColor: C.primary, borderRadius: 2 },
+  urgent: { flexDirection: 'row', gap: 10, margin: 16, marginBottom: 0, padding: 14, borderRadius: 14, backgroundColor: TRIAGE.RED.bg, borderWidth: 1.5, borderColor: TRIAGE.RED.color },
+  urgentText: { flex: 1, color: TRIAGE.RED.text, fontSize: 13, fontWeight: '600', lineHeight: 19 },
   msgs: { flex: 1 },
   bubble: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   bubbleUser: { justifyContent: 'flex-end' },
@@ -121,6 +183,9 @@ const styles = StyleSheet.create({
   bubbleInnerUser: { backgroundColor: C.primary, borderBottomRightRadius: 4 },
   bubbleText: { fontSize: 14, color: C.textMid, lineHeight: 20 },
   bubbleTextUser: { color: C.white },
+  errorBox: { backgroundColor: C.white, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#FFCDD2', gap: 8 },
+  errorText: { color: C.textMid, fontSize: 13, lineHeight: 18 },
+  retry: { color: C.primary, fontWeight: '700', fontSize: 14 },
   quickRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
   quickChip: { backgroundColor: C.primaryBg, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.border },
   quickText: { color: C.primary, fontSize: 13, fontWeight: '500' },

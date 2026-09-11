@@ -1,82 +1,116 @@
-// Screen 7: Processing / Organizing Info
+// Screen 7: Processing — submits the intake; the backend extracts, runs the Safety Engine and stores the case
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useEffect, useState } from 'react'
 import { C, S } from '../constants/theme'
+import { api, SERVER_ERROR } from '../lib/api'
+import { useIntake } from '../lib/intake'
 
 const STEPS = [
-  { icon: 'chatbubbles-outline', label: 'Reading your responses', done: true },
-  { icon: 'document-text-outline', label: 'Analyzing documents', done: true },
-  { icon: 'medkit-outline', label: 'Extracting key symptoms', done: true },
-  { icon: 'shield-checkmark-outline', label: 'Running safety checks', done: false },
-  { icon: 'clipboard-outline', label: 'Preparing summary for doctor', done: false },
+  { icon: 'chatbubbles-outline', label: 'Reading your responses' },
+  { icon: 'document-text-outline', label: 'Checking your documents' },
+  { icon: 'medkit-outline', label: 'Extracting key symptoms' },
+  { icon: 'shield-checkmark-outline', label: 'Running safety checks' },
+  { icon: 'clipboard-outline', label: 'Preparing summary for doctor' },
 ]
 
 export default function Processing() {
   const router = useRouter()
+  const { patient, language, messages, documents, update } = useIntake()
   const [step, setStep] = useState(0)
-  const [done, setDone] = useState(false)
+  const [status, setStatus] = useState<'working' | 'done' | 'error' | 'empty'>('working')
+
+  const submit = async () => {
+    if (!messages.some(m => m.role === 'patient')) {
+      setStatus('empty')
+      return
+    }
+    setStatus('working')
+    try {
+      const result = await api.submitCase({ patient, language, messages, documents })
+      update({ result })
+      setStatus('done')
+    } catch {
+      setStatus('error')
+    }
+  }
 
   useEffect(() => {
-    const t = setInterval(() => {
-      setStep(s => {
-        if (s >= STEPS.length - 1) {
-          clearInterval(t)
-          setTimeout(() => setDone(true), 600)
-          return s
-        }
-        return s + 1
-      })
-    }, 900)
-    return () => clearInterval(t)
+    submit()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Step animation while the request is in flight
+  useEffect(() => {
+    if (status !== 'working') return
+    const t = setInterval(() => setStep(s => Math.min(s + 1, STEPS.length - 1)), 900)
+    return () => clearInterval(t)
+  }, [status])
+
+  const done = status === 'done'
+  const title = {
+    working: 'Organizing Your Information',
+    done: 'All Done!',
+    error: 'Could Not Send',
+    empty: 'Nothing To Send Yet',
+  }[status]
+  const subtitle = {
+    working: 'Checking everything you shared...',
+    done: 'Your health summary is ready for your doctor.',
+    error: SERVER_ERROR,
+    empty: 'Please answer at least one question in the chat first.',
+  }[status]
 
   return (
     <SafeAreaView style={S.screen}>
       <View style={styles.container}>
-        {/* Brain animation placeholder */}
         <View style={styles.brainCircle}>
-          <Ionicons name="hardware-chip" size={56} color={C.primary} />
+          <Ionicons name={status === 'error' ? 'cloud-offline' : 'hardware-chip'} size={56} color={C.primary} />
           <View style={styles.pulseRing} />
         </View>
 
-        <Text style={styles.title}>{done ? 'All Done!' : 'Organizing Your Information'}</Text>
-        <Text style={styles.subtitle}>
-          {done
-            ? 'Your health summary is ready for your doctor.'
-            : 'Our AI is carefully reviewing everything you shared...'}
-        </Text>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.subtitle}>{subtitle}</Text>
 
-        {/* Step checklist */}
-        <View style={styles.checklist}>
-          {STEPS.map((s, i) => {
-            const isActive = i === step && !done
-            const isDone = done || i < step
-            return (
-              <View key={i} style={styles.checkItem}>
-                <View style={[styles.checkCircle, isDone && styles.checkCircleDone, isActive && styles.checkCircleActive]}>
-                  {isDone
-                    ? <Ionicons name="checkmark" size={14} color={C.white} />
-                    : isActive
-                      ? <Ionicons name="ellipsis-horizontal" size={12} color={C.primary} />
-                      : <View style={styles.checkDot} />
-                  }
+        {(status === 'working' || done) && (
+          <View style={styles.checklist}>
+            {STEPS.map((s, i) => {
+              const isDone = done || i < step
+              const isActive = !done && i === step
+              return (
+                <View key={i} style={styles.checkItem}>
+                  <View style={[styles.checkCircle, isDone && styles.checkCircleDone, isActive && styles.checkCircleActive]}>
+                    {isDone
+                      ? <Ionicons name="checkmark" size={14} color={C.white} />
+                      : isActive
+                        ? <Ionicons name="ellipsis-horizontal" size={12} color={C.primary} />
+                        : <View style={styles.checkDot} />}
+                  </View>
+                  <Ionicons name={s.icon as any} size={16} color={isDone ? C.green : isActive ? C.primary : C.textGray} />
+                  <Text style={[styles.checkLabel, isDone && styles.checkLabelDone, isActive && styles.checkLabelActive]}>{s.label}</Text>
                 </View>
-                <Ionicons name={s.icon as any} size={16} color={isDone ? C.green : isActive ? C.primary : C.textGray} />
-                <Text style={[styles.checkLabel, isDone && styles.checkLabelDone, isActive && styles.checkLabelActive]}>
-                  {s.label}
-                </Text>
-              </View>
-            )
-          })}
-        </View>
+              )
+            })}
+          </View>
+        )}
 
         {done && (
-          <TouchableOpacity style={[S.btn, { width: '100%', marginTop: 32 }]} onPress={() => router.push('/timeline')}>
+          <TouchableOpacity style={[S.btn, { width: '100%', marginTop: 32 }]} onPress={() => router.replace('/timeline')}>
             <Text style={S.btnText}>View Your Health Summary</Text>
             <Ionicons name="arrow-forward" size={18} color={C.white} />
+          </TouchableOpacity>
+        )}
+        {status === 'error' && (
+          <TouchableOpacity style={[S.btn, { width: '100%', marginTop: 24 }]} onPress={submit}>
+            <Ionicons name="refresh" size={18} color={C.white} />
+            <Text style={S.btnText}>Try Again</Text>
+          </TouchableOpacity>
+        )}
+        {status === 'empty' && (
+          <TouchableOpacity style={[S.btn, { width: '100%', marginTop: 24 }]} onPress={() => router.replace('/chat')}>
+            <Text style={S.btnText}>Back to Chat</Text>
           </TouchableOpacity>
         )}
       </View>
