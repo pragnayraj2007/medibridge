@@ -272,3 +272,21 @@ def signed_url(path: str, expires: int = 600) -> str | None:
         return base + rel if rel and rel.startswith("/") else rel
     except (httpx.HTTPError, ValueError):
         return None
+
+
+def gemini_diagnostics() -> dict:
+    """Doctor-only check: is the key accepted, and which flash models can it use?"""
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
+        return {"configured": False}
+    try:
+        r = httpx.get("https://generativelanguage.googleapis.com/v1beta/models", headers={"x-goog-api-key": key},
+                      params={"pageSize": 200}, timeout=15)
+        if r.status_code >= 400:
+            return {"configured": True, "status": r.status_code, "error": r.text[:300]}
+        names = [m.get("name", "").removeprefix("models/") for m in r.json().get("models", [])
+                 if "generateContent" in (m.get("supportedGenerationMethods") or [])]
+        return {"configured": True, "status": r.status_code, "candidates": _gemini_models(),
+                "available_flash": sorted(n for n in names if "flash" in n)[:40]}
+    except httpx.HTTPError as e:
+        return {"configured": True, "error": type(e).__name__}

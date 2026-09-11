@@ -17,7 +17,7 @@ function Log($s) { $script:lines.Add($s); Write-Host $s }
 function Check($name, [scriptblock]$body) {
   $t = [Diagnostics.Stopwatch]::StartNew()
   try { $r = & $body; Log ("PASS  {0}  ({1} ms)  {2}" -f $name, $t.ElapsedMilliseconds, $r) }
-  catch { $script:fail++; Log ("FAIL  {0}  ({1} ms)  {2}" -f $name, $t.ElapsedMilliseconds, $_.Exception.Message) }
+  catch { $script:fail++; Log ("FAIL  {0}  ({1} ms)  {2} {3}" -f $name, $t.ElapsedMilliseconds, $_.Exception.Message, $_.ErrorDetails.Message) }
 }
 function Call($method, $url, $obj, $headers) {
   $req = @{ Method = $method; Uri = $url; TimeoutSec = 90; Headers = $headers }
@@ -63,7 +63,7 @@ Check 'Hindi TTS' {
 Check 'Document upload -> OCR -> Gemini findings' {
   $d = Upload "$Backend/documents" ([IO.File]::ReadAllBytes($Document)) 'sample-lab-report.png' 'image/png' @{ doc_type = 'Lab Report' } $P
   $script:doc = $d
-  "status=$($d.status) ocr=$($d.ocr_status) analysis=$($d.analysis_status) summary=""$($d.summary)"""
+  "status=$($d.status) ocr=$($d.ocr_status) analysis=$($d.analysis_status) error=$($d.analysis_error) summary=""$($d.summary)"""
 }
 Check 'Unsupported file is rejected clearly' {
   try { $null = Upload "$Backend/documents" ([Text.Encoding]::ASCII.GetBytes('GIF89a....')) 'x.gif' 'image/gif' @{} $P; throw 'accepted a GIF' }
@@ -89,8 +89,13 @@ Check 'Summary mentions document + conflict (Groq)' {
   if (-not $DoctorPassword) { return 'skipped (no doctor password)' }
   $s = Call Post "$Site/api/auth/login" @{ email = 'ananya.rao@medibridge.demo'; password = $DoctorPassword }
   $script:D = @{ Authorization = "Bearer $($s.token)" }
+  Log "  logged in as $($s.doctor.name)"
   $one = Call Get "$Site/api/cases/$($c[0].id)" $null $script:D
   "summary_source=$($one.extraction.summary_source) docs=$(@($one.document_details).Count) summary=""$($one.summary)"""
+}
+Check 'diagnostics (doctor only)' {
+  if (-not $script:D) { return 'skipped' }
+  (Call Get "$Site/api/diagnostics" $null $script:D) | ConvertTo-Json -Depth 5 -Compress
 }
 Check 'cleanup' {
   if ($script:D) {

@@ -217,6 +217,18 @@ def me(doctor: dict = Depends(doctor_auth)):
     return service.public_doctor(rows[0])
 
 
+@app.get("/diagnostics")
+def diagnostics(doctor: dict = Depends(doctor_auth)):
+    """Which integrations work right now (no secrets in the output)."""
+    db = "ok"
+    try:
+        store.select("doctors", limit=1)
+    except StorageError as e:
+        db = str(e)[:200]
+    return {"storage": store.name, "database": db, "groq": ai.ai_enabled(), "sarvam": voice.enabled(),
+            "paddleocr": bool(os.getenv("PADDLEOCR_URL")), "gemini": docs_pipeline.gemini_diagnostics()}
+
+
 @app.get("/doctors")
 def doctors(doctor: dict = Depends(doctor_auth)):
     return service.list_doctors(store)
