@@ -1,6 +1,6 @@
 -- MediBridge cases table. Run once in Supabase → SQL Editor.
--- Only the backend (service role key) reads/writes; RLS with no policies
--- blocks the public anon key entirely.
+-- Only the backend (secret / service_role key) reads and writes. The public
+-- anon/authenticated roles get no grants, and RLS with no policies blocks them too.
 
 create table if not exists public.cases (
   id            uuid primary key default gen_random_uuid(),
@@ -22,3 +22,6 @@ create index if not exists cases_created_at_idx on public.cases (created_at desc
 create index if not exists cases_triage_status_idx on public.cases (triage_level, status);
 
 alter table public.cases enable row level security;
+
+revoke all on public.cases from anon, authenticated;
+grant select, insert, update, delete on public.cases to service_role;
