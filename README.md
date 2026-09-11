@@ -27,7 +27,7 @@ The LLM never makes the final triage decision. The deterministic Safety Engine d
 
 | Layer | Technology |
 |---|---|
-| Patient Frontend | Next.js → Vercel |
+| Patient Frontend | React Native (Expo) |
 | Doctor Frontend | Next.js → Vercel |
 | Backend/API | FastAPI → Render |
 | Database | Supabase |
@@ -45,9 +45,16 @@ The LLM never makes the final triage decision. The deterministic Safety Engine d
 ```
 medibridge/
 ├── apps/
-│   ├── patient-app/        # Next.js — patient-facing mobile app
+│   ├── patient-app/        # Expo (React Native) — patient mobile app
 │   ├── doctor-dashboard/   # Next.js — clinician web dashboard
 │   └── backend/            # FastAPI — API, AI pipeline, Safety Engine
+│       ├── main.py           # API routes
+│       ├── safety_engine.py  # deterministic RED/YELLOW/GREEN (WHO IITT)
+│       ├── keywords.py       # danger-sign keyword safety net
+│       ├── ai.py             # Groq: intake questions, extraction, summary
+│       ├── storage.py        # Supabase REST, in-memory fallback
+│       ├── supabase/schema.sql
+│       └── tests/
 ├── .env.example
 ├── .gitignore
 └── README.md
@@ -64,12 +71,7 @@ medibridge/
 
 ### Patient App
 
-```bash
-cd apps/patient-app
-npm install
-cp ../../.env.example .env.local   # fill in NEXT_PUBLIC_API_URL
-npm run dev                        # http://localhost:3000
-```
+See `apps/patient-app/SETUP.txt`, then `npx expo start` and scan the QR code with Expo Go.
 
 ### Doctor Dashboard
 
@@ -84,11 +86,29 @@ npm run dev                        # http://localhost:3001
 
 ```bash
 cd apps/backend
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env               # fill in all keys
-uvicorn main:app --reload --port 8000
+python -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt      # Windows: .venv\Scripts\python
+cp .env.example .env                                      # all keys optional for local dev
+.venv/bin/python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+.venv/bin/python -m unittest discover -s tests            # Safety Engine tests
 ```
+
+Without `SUPABASE_URL`/`SUPABASE_SERVICE_KEY` cases are kept in memory (lost on restart).
+Without `GROQ_API_KEY` the intake uses scripted questions and keyword-only extraction.
+For Supabase, run `supabase/schema.sql` once in the SQL editor. API docs: http://localhost:8000/docs
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/health` | status, storage mode, AI mode |
+| POST | `/intake/next-question` | next intake question + live safety check |
+| POST | `/cases` | submit intake → extraction → Safety Engine → stored case + patient guidance |
+| GET | `/cases?triage_level=&status=` | doctor case list (newest first) |
+| GET | `/cases/{id}` | case detail |
+| PATCH | `/cases/{id}` | set status: `new` / `reviewed` / `follow_up` |
+
+### Safety Engine
+
+`safety_engine.py` applies the WHO/ICRC/MSF [Interagency Integrated Triage Tool](https://www.who.int/tools/triage) (adult) criteria to flags, age, pregnancy and vitals. Flags come from the keyword matcher **and** Groq; Groq can add flags from a fixed vocabulary but never sets the level. Every result lists the rules that fired. Extra conservative rules are labelled `MediBridge`. Thresholds need clinical review before real use.
 
 ---
 
