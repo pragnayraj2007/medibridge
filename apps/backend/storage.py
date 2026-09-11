@@ -13,12 +13,15 @@ supabase/migrations/*.sql.
 """
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
+
+log = logging.getLogger("medibridge.storage")
 
 TABLES = ("patients", "doctors", "cases", "appointments", "documents")
 
@@ -126,7 +129,10 @@ class SupabaseStore:
         headers = {"apikey": key, "Prefer": "return=representation"}
         if key.startswith("eyJ"):  # legacy service_role JWT; new sb_secret_ keys go in apikey only
             headers["Authorization"] = f"Bearer {key}"
-        self._client = httpx.Client(headers=headers, timeout=15)
+        # Short keep-alive: serverless instances sleep between requests and a pooled
+        # connection the server has already closed fails on reuse.
+        self._client = httpx.Client(headers=headers, timeout=15,
+                                    limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=5))
 
     @staticmethod
     def _params(filters: Optional[dict]) -> dict:
@@ -141,10 +147,23 @@ class SupabaseStore:
         return params
 
     def _send(self, method: str, table: str, **kw) -> list[dict]:
-        try:
-            r = self._client.request(method, self._base + table, **kw)
-        except httpx.HTTPError as e:
-            raise StorageError(f"database unreachable: {type(e).__name__}") from e
+        # One retry for transient transport failures. GET and PATCH are idempotent here;
+        # POST is retried only when the connection failed before the request was sent.
+        retryable = (httpx.ConnectError, httpx.PoolTimeout) if method == "POST" else (httpx.TransportError,)
+        for attempt in (1, 2):
+            try:
+                r = self._client.request(method, self._base + table, **kw)
+            except retryable as e:
+                if attempt == 1:
+                    log.warning("Supabase %s %s failed (%s), retrying", method, table, type(e).__name__)
+                    continue
+                raise StorageError(f"database unreachable: {type(e).__name__}") from e
+            except httpx.HTTPError as e:
+                raise StorageError(f"database unreachable: {type(e).__name__}") from e
+            if r.status_code in (502, 503, 504) and method != "POST" and attempt == 1:
+                log.warning("Supabase %s %s returned %s, retrying", method, table, r.status_code)
+                continue
+            break
         if r.status_code == 409 or (r.status_code == 400 and '"23505"' in r.text):
             raise Conflict(r.text[:200])
         if r.status_code >= 400:
