@@ -146,11 +146,16 @@ def patient_documents(patient: dict = Depends(patient_by_code)):
 @app.post("/intake/next-question")
 def next_question(body: NextQuestionIn):
     result, _, _ = run_safety(body.patient, body.messages)
-    question, source = ai.next_question(body.patient, body.messages, body.language, urgent=result.level == "RED")
+    urgent = result.level == "RED"
+    question, source = ai.next_question(body.patient, body.messages, body.language, urgent=urgent)
+    asked = sum(1 for m in body.messages if m.role == "assistant")
+    total = ai.URGENT_MAX_QUESTIONS if urgent else ai.MAX_QUESTIONS
     return {
         "question": question,
         "done": question == ai.DONE_MESSAGE,
         "source": source,
+        # So the patient can see how much is left (the length is fixed in code)
+        "progress": {"number": min(asked + 1, total), "total": total},
         # Live safety check on every turn (keywords only, deterministic)
         "safety": {"level": result.level, "urgent": result.level == "RED",
                    "guidance": GUIDANCE["RED"] if result.level == "RED" else None},

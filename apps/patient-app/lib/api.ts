@@ -57,6 +57,7 @@ export type NextQuestionResponse = {
   question: string
   done: boolean
   source: 'groq' | 'rules'
+  progress?: { number: number; total: number }
   safety: { level: Level; urgent: boolean; guidance: string | null }
 }
 

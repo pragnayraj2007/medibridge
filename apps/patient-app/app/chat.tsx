@@ -21,6 +21,7 @@ export default function Chat() {
   const [error, setError] = useState(false)
   const [done, setDone] = useState(false)
   const [urgent, setUrgent] = useState<string | null>(null)
+  const [progress, setProgress] = useState<{ number: number; total: number } | null>(null)
   const [voiceNote, setVoiceNote] = useState<string | null>(null)
   const [speakReplies, setSpeakReplies] = useState(false)
   const scroll = useRef<ScrollView>(null)
@@ -40,6 +41,7 @@ export default function Chat() {
       const res = await api.nextQuestion({ patient, language, messages: history }, session)
       update({ messages: [...history, { role: 'assistant', text: res.question }] })
       setDone(res.done)
+      setProgress(res.progress ?? null)
       if (res.safety.urgent) setUrgent(res.safety.guidance)
       if (speakReplies) {
         speak(session, res.question, language).then(ok => {
@@ -110,7 +112,9 @@ export default function Chat() {
             <View style={styles.aiAvatar}><Ionicons name="hardware-chip-outline" size={16} color={C.white} /></View>
             <View>
               <Text style={styles.headerTitle}>MediBridge Assistant</Text>
-              <Text style={styles.headerSub}>Step 3 of 5 · {lang}</Text>
+              <Text style={styles.headerSub}>
+                {lang}{progress && !done ? ` · Question ${progress.number} of ${progress.total}` : ' · Step 3 of 5'}
+              </Text>
             </View>
           </View>
           <TouchableOpacity

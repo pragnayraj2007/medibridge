@@ -384,5 +384,8 @@ class IntakeLengthTest(unittest.TestCase):
         r = c.post("/intake/next-question", json={"messages": msgs, "language": "en"}).json()
         self.assertTrue(r["safety"]["urgent"])
         self.assertTrue(r["done"])
+        self.assertEqual(r["progress"]["total"], 4)  # serious problem: 4 questions
         r = c.post("/intake/next-question", json={"messages": msgs[:6], "language": "en"}).json()
         self.assertFalse(r["done"])
+        r = c.post("/intake/next-question", json={"messages": [], "language": "en"}).json()
+        self.assertEqual(r["progress"], {"number": 1, "total": 6})  # basic problem: 6 questions
