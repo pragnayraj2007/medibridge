@@ -1,0 +1,14 @@
+MediBridge Patient App (Expo) - first-time setup (Windows PowerShell)
+
+Run these one at a time, inside this folder:
+
+1) npm install
+
+2) npx expo install expo-router react-native react react-dom react-native-web @expo/metro-runtime expo-status-bar expo-linking expo-constants react-native-safe-area-context react-native-screens @expo/vector-icons expo-linear-gradient
+
+3) npx expo install typescript @types/react -- --save-dev
+
+4) npx expo start -c
+
+Then scan the QR code with Expo Go (Android) or the Camera app (iPhone).
+If npm complains about peer dependencies (ERESOLVE), add  -- --legacy-peer-deps  to the end of step 2.

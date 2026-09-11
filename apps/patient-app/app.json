@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "MediBridge",
+    "slug": "medibridge-patient",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "medibridge",
+    "userInterfaceStyle": "light",
+    "ios": { "supportsTablet": false },
+    "android": { "adaptiveIcon": { "backgroundColor": "#EEF5FF" } },
+    "web": { "bundler": "metro", "output": "single" },
+    "plugins": ["expo-router"]
+  }
+}

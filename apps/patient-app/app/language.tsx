@@ -1,0 +1,95 @@
+// Screen 2: Choose Language
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { useRouter } from 'expo-router'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { Ionicons } from '@expo/vector-icons'
+import { useState } from 'react'
+import { C, S } from '../constants/theme'
+
+const LANGS = [
+  { code: 'en', label: 'English', native: 'English' },
+  { code: 'hi', label: 'Hindi', native: 'हिंदी' },
+  { code: 'te', label: 'Telugu', native: 'తెలుగు' },
+  { code: 'ta', label: 'Tamil', native: 'தமிழ்' },
+  { code: 'kn', label: 'Kannada', native: 'ಕನ್ನಡ' },
+  { code: 'mr', label: 'Marathi', native: 'मराठी' },
+]
+
+export default function Language() {
+  const router = useRouter()
+  const [selected, setSelected] = useState('en')
+
+  return (
+    <SafeAreaView style={S.screen}>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.stepBadge}><Text style={styles.stepText}>1 of 8</Text></View>
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: '12.5%' }]} />
+          </View>
+        </View>
+
+        {/* Title */}
+        <View style={styles.iconCircle}>
+          <Ionicons name="globe" size={36} color={C.primary} />
+        </View>
+        <Text style={styles.title}>Choose Your Language</Text>
+        <Text style={styles.subtitle}>Select the language you're most comfortable with</Text>
+
+        {/* Language grid */}
+        <View style={styles.grid}>
+          {LANGS.map(l => (
+            <TouchableOpacity
+              key={l.code}
+              style={[styles.langCard, selected === l.code && styles.langCardSelected]}
+              onPress={() => setSelected(l.code)}
+            >
+              {selected === l.code && (
+                <View style={styles.checkmark}>
+                  <Ionicons name="checkmark" size={12} color={C.white} />
+                </View>
+              )}
+              <Text style={[styles.langNative, selected === l.code && styles.langNativeSelected]}>{l.native}</Text>
+              <Text style={[styles.langLabel, selected === l.code && styles.langLabelSelected]}>{l.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Listen button */}
+        <TouchableOpacity style={styles.listenBtn}>
+          <Ionicons name="volume-high-outline" size={18} color={C.primary} />
+          <Text style={styles.listenText}>Listen to options</Text>
+        </TouchableOpacity>
+
+        {/* Continue */}
+        <TouchableOpacity style={[S.btn, { width: '100%', marginTop: 16 }]} onPress={() => router.push('/auth')}>
+          <Text style={S.btnText}>Continue</Text>
+          <Ionicons name="arrow-forward" size={18} color={C.white} />
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  )
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingHorizontal: 24, paddingTop: 12 },
+  header: { marginBottom: 24 },
+  stepBadge: { alignSelf: 'flex-start', backgroundColor: C.primaryBg, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 10 },
+  stepText: { color: C.primary, fontSize: 12, fontWeight: '600' },
+  progressBar: { height: 6, backgroundColor: C.border, borderRadius: 3 },
+  progressFill: { height: 6, backgroundColor: C.primary, borderRadius: 3 },
+  iconCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: C.primaryBg, alignItems: 'center', justifyContent: 'center', marginBottom: 16, alignSelf: 'center' },
+  title: { fontSize: 26, fontWeight: '800', color: C.textDark, textAlign: 'center', marginBottom: 8 },
+  subtitle: { fontSize: 14, color: C.textGray, textAlign: 'center', marginBottom: 28 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 20 },
+  langCard: { width: '44%', borderRadius: 16, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.white, padding: 16, alignItems: 'center', position: 'relative' },
+  langCardSelected: { borderColor: C.primary, backgroundColor: C.primaryBg },
+  checkmark: { position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 10, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
+  langNative: { fontSize: 20, fontWeight: '700', color: C.textDark, marginBottom: 4 },
+  langNativeSelected: { color: C.primary },
+  langLabel: { fontSize: 12, color: C.textGray },
+  langLabelSelected: { color: C.primaryLight },
+  listenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12 },
+  listenText: { color: C.primary, fontSize: 14, fontWeight: '600' },
+})

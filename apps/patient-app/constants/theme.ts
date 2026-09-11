@@ -1,0 +1,44 @@
+export const C = {
+  primary: '#1565C0',
+  primaryLight: '#1E88E5',
+  primaryBg: '#EEF5FF',
+  white: '#FFFFFF',
+  textDark: '#1A237E',
+  textMid: '#37474F',
+  textGray: '#78909C',
+  green: '#43A047',
+  greenLight: '#E8F5E9',
+  cardBg: '#FFFFFF',
+  border: '#E3EAF6',
+}
+
+export const S = {
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#1565C0',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  btn: {
+    backgroundColor: '#1565C0',
+    borderRadius: 30,
+    paddingVertical: 15,
+    alignItems: 'center' as const,
+    flexDirection: 'row' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+  },
+  btnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700' as const,
+  },
+  screen: {
+    flex: 1,
+    backgroundColor: '#EEF5FF',
+  },
+}
