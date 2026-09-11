@@ -53,7 +53,7 @@ export default function PatientDetail() {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-3 text-sm text-gray-500">
         {error ?? 'Loading…'}
-        <Link href="/" className="text-blue-600 hover:underline">← Back to dashboard</Link>
+        <Link href="/doctor" className="text-blue-600 hover:underline">← Back to dashboard</Link>
       </div>
     )
   }
@@ -74,9 +74,9 @@ export default function PatientDetail() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
             </svg>
           </div>
-          <span className="font-bold text-gray-900">MediBridge</span>
+          <Link href="/" className="font-bold text-gray-900">MediBridge</Link>
           <span className="text-gray-300">|</span>
-          <Link href="/" className="text-sm text-blue-600 hover:underline">Dashboard</Link>
+          <Link href="/doctor" className="text-sm text-blue-600 hover:underline">Dashboard</Link>
           <span className="text-gray-300">/</span>
           <span className="text-sm text-gray-500">{patientName(c)}</span>
         </div>

@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'MediBridge Doctor Dashboard',
-  description: 'Clinical triage dashboard',
+  title: 'MediBridge',
+  description: 'AI-assisted clinical intake and triage',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

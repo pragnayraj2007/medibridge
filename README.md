@@ -8,7 +8,7 @@ AI-assisted clinical intake and triage platform. Reduces the gap between patient
 
 ```
 Patient App ──┐
-              ├──→ Backend (Render) ──→ Supabase
+              ├──→ Backend (Vercel) ──→ Supabase
 Doctor Web ───┘         │
                         ├──→ Groq (clinical agent)
                         ├──→ Gemini (multimodal)
@@ -27,9 +27,9 @@ The LLM never makes the final triage decision. The deterministic Safety Engine d
 
 | Layer | Technology |
 |---|---|
-| Patient Frontend | React Native (Expo) |
+| Patient Frontend | React Native (Expo) → Expo Go + web on Vercel |
 | Doctor Frontend | Next.js → Vercel |
-| Backend/API | FastAPI → Render |
+| Backend/API | FastAPI → Vercel (Python) |
 | Database | Supabase |
 | Clinical Agent | Groq `openai/gpt-oss-120b` |
 | Multimodal | Gemini |
@@ -78,8 +78,7 @@ See `apps/patient-app/SETUP.txt`, then `npx expo start` and scan the QR code wit
 ```bash
 cd apps/doctor-dashboard
 npm install
-cp ../../.env.example .env.local   # fill in NEXT_PUBLIC_API_URL
-npm run dev                        # http://localhost:3001
+npm run dev        # http://localhost:3001/doctor — proxies /api to BACKEND_URL (default http://127.0.0.1:8000)
 ```
 
 ### Backend
@@ -111,6 +110,27 @@ For Supabase, run `supabase/schema.sql` once in the SQL editor. API docs: http:/
 `safety_engine.py` applies the WHO/ICRC/MSF [Interagency Integrated Triage Tool](https://www.who.int/tools/triage) (adult) criteria to flags, age, pregnancy and vitals. Flags come from the keyword matcher **and** Groq; Groq can add flags from a fixed vocabulary but never sets the level. Every result lists the rules that fired. Extra conservative rules are labelled `MediBridge`. Thresholds need clinical review before real use.
 
 ---
+
+## Deployment (Vercel + Supabase)
+
+Everything opens from one URL (the `doctor-dashboard` Vercel project):
+
+| Path | What |
+|---|---|
+| `/` | Home — links to both apps |
+| `/patient` | Patient app (Expo web export, built by `apps/patient-app/export-web.bat`) |
+| `/doctor` | Doctor dashboard |
+| `/api/*` | Backend, proxied to the FastAPI Vercel project (`BACKEND_URL`) |
+
+First-time setup:
+
+1. **Supabase** — create a project, run `apps/backend/supabase/schema.sql` in the SQL Editor, copy the Project URL and a secret key.
+2. **Backend** — `cd apps/backend`, `npx vercel deploy --prod` (FastAPI is detected from `main.py`). Add env vars `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (and `GROQ_API_KEY`) with `npx vercel env add <NAME> production`, then deploy again.
+3. **Site** — run `export-web.bat` in the patient app, then `cd apps/doctor-dashboard`, `npx vercel env add BACKEND_URL production` (the backend's production URL), `npx vercel deploy --prod`.
+
+Later updates: double-click `deploy.bat` in the repo root.
+
+The Vercel backend needs Supabase — serverless instances don't share memory.
 
 ## Environment Variables
 

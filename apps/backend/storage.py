@@ -47,10 +47,10 @@ class SupabaseStore:
 
     def __init__(self, url: str, key: str) -> None:
         self._base = url.rstrip("/") + "/rest/v1/cases"
-        self._client = httpx.Client(
-            headers={"apikey": key, "Authorization": f"Bearer {key}", "Prefer": "return=representation"},
-            timeout=15,
-        )
+        headers = {"apikey": key, "Prefer": "return=representation"}
+        if key.startswith("eyJ"):  # legacy service_role JWT; new sb_secret_ keys go in apikey only
+            headers["Authorization"] = f"Bearer {key}"
+        self._client = httpx.Client(headers=headers, timeout=15)
 
     def create(self, row: dict) -> dict:
         r = self._client.post(self._base, json=row)
