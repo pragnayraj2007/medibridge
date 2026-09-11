@@ -168,7 +168,7 @@ main
 5. Doctor opens dashboard → sees prioritised case list
 6. Doctor reviews AI summary + triage → makes clinical decision
 
----
+--- //fff
 
 ## Team
 
