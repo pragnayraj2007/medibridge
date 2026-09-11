@@ -11,6 +11,7 @@ call :addkey GROQ_API_KEY --sensitive || goto :fail
 call :addkey GEMINI_API_KEY --sensitive || goto :fail
 call :addkey SARVAM_API_KEY --sensitive || goto :fail
 call :addkey PADDLEOCR_URL --no-sensitive || goto :fail
+call :addkey PADDLEOCR_TOKEN --sensitive || goto :fail
 echo Deploying backend...
 call npx --yes vercel@latest deploy --prod --yes
 if errorlevel 1 goto :fail

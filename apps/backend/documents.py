@@ -8,7 +8,8 @@ the doctor sees what worked:
                    | empty (nothing readable) | failed
 
 PaddleOCR is too large for a Vercel serverless function, so it runs as its own
-service (PaddleOCR / PaddleX serving, `POST /ocr`) at PADDLEOCR_URL. Without it
+service (apps/ocr-service on Hugging Face Spaces, or PaddleX serving; `POST /ocr`)
+at PADDLEOCR_URL, with an optional bearer PADDLEOCR_TOKEN. Without it
 Gemini reads the image or PDF directly. Gemini findings are information for
 the doctor and candidate danger signs for the Safety Engine; they never set
 the triage level.
@@ -84,9 +85,11 @@ def run_ocr(data: bytes, mime: str) -> dict:
     if not url:
         return {"status": "not_configured", "engine": "paddleocr", "text": ""}
     try:
+        token = os.getenv("PADDLEOCR_TOKEN")
         r = httpx.post(
             url.rstrip("/") + ("" if url.rstrip("/").endswith("/ocr") else "/ocr"),
             json={"file": base64.b64encode(data).decode(), "fileType": 0 if mime == "application/pdf" else 1},
+            headers={"Authorization": f"Bearer {token}"} if token else {},
             timeout=25,
         )
         r.raise_for_status()
