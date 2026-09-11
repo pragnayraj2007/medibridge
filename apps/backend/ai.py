@@ -25,16 +25,28 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
 LANGUAGES = {"en": "English", "hi": "Hindi", "te": "Telugu", "ta": "Tamil", "kn": "Kannada", "mr": "Marathi"}
 
-# Short intake: at most MAX_QUESTIONS questions, related items asked together.
-MAX_QUESTIONS = int(os.getenv("INTAKE_MAX_QUESTIONS", "4"))
-URGENT_MAX_QUESTIONS = 2  # a danger sign is already flagged: get the patient to care faster
+# Interview length is fixed in code, never left to the model:
+#   basic problem   -> 6 questions
+#   serious problem -> 4 questions (the Safety Engine has flagged RED)
+MAX_QUESTIONS = int(os.getenv("INTAKE_BASIC_QUESTIONS", "6"))
+URGENT_MAX_QUESTIONS = int(os.getenv("INTAKE_SERIOUS_QUESTIONS", "4"))
 
-FALLBACK_QUESTIONS = [
-    "What is the main problem that brought you in today?",
-    "When did it start, and how bad is it on a scale of 1 to 10?",
-    "Do you have any other symptoms, like fever, vomiting, dizziness or trouble breathing?",
-    "Do you have any long-term conditions, take any medicines, or have any allergies?",
+# One fixed topic per question: (what to ask about, English fallback if the AI is unavailable)
+BASIC_PLAN = [
+    ("the main problem that brought them in today", "What is the main problem that brought you in today?"),
+    ("when it started, and whether it is getting better or worse", "When did it start, and is it getting better or worse?"),
+    ("how bad it is on a scale of 1 to 10", "How bad is it on a scale of 1 to 10?"),
+    ("any other symptoms they have noticed", "Do you have any other symptoms, like fever, vomiting, or trouble breathing?"),
+    ("any long-term conditions, like diabetes or high blood pressure", "Do you have any long-term conditions, like diabetes or high blood pressure?"),
+    ("any medicines they take and any allergies", "Are you taking any medicines, and do you have any allergies?"),
 ]
+SERIOUS_PLAN = [
+    ("the main problem that brought them in today", "What is the main problem that brought you in today?"),
+    ("when it started, and how bad it is on a scale of 1 to 10", "When did it start, and how bad is it on a scale of 1 to 10?"),
+    ("any other symptoms they have noticed", "Do you have any other symptoms, like fever, vomiting, or trouble breathing?"),
+    ("any long-term conditions, medicines they take, and allergies", "Do you have any long-term conditions, take any medicines, or have any allergies?"),
+]
+FALLBACK_QUESTIONS = [q for _, q in BASIC_PLAN]
 DONE_MESSAGE = "Thank you, I have what I need. Tap 'Done answering' to continue."
 
 
@@ -67,7 +79,45 @@ def _patient_line(p) -> str:
     return ", ".join(bits)
 
 
-# ── Intake conversation: see intake_agent.py ────────────────────────────────
+# ── Intake conversation ─────────────────────────────────────────────────────
+
+NEXT_QUESTION_PROMPT = """You are MediBridge, a friendly intake assistant collecting information for a doctor before a clinic visit.
+Write question {number} of {total}, in {language}. Ask ONLY about: {topic}.
+- One short, simple question in plain everyday words.
+- Ask only about that topic. Do not bring up any other topic, and never mention anything the patient has not said.
+- If the patient has already clearly answered this topic, ask one short follow-up about the same topic instead.
+- Answers may be speech-to-text and contain recognition errors or mixed languages; understand them as best you can.
+- Never offer answer options or multiple-choice lists.
+- Never diagnose, never say how urgent it is, never give treatment advice. If the patient describes an emergency happening now, first tell them to alert staff immediately, then ask the question.
+Reply with the question only."""
+
+
+def next_question(patient, messages, language: str = "en", urgent: bool = False) -> tuple[str, str]:
+    """Returns (question, source). Question == DONE_MESSAGE when intake is complete.
+    Basic problems get MAX_QUESTIONS questions; once the Safety Engine flags RED the
+    interview is cut to URGENT_MAX_QUESTIONS. Each question has a fixed topic."""
+    asked = sum(1 for m in messages if m.role == "assistant")
+    plan = SERIOUS_PLAN if urgent else BASIC_PLAN
+    limit = min(URGENT_MAX_QUESTIONS, len(plan)) if urgent else min(MAX_QUESTIONS, len(plan))
+    if asked >= limit:
+        return DONE_MESSAGE, "rules"
+    topic, fallback = plan[asked]
+    if ai_enabled():
+        prompt = NEXT_QUESTION_PROMPT.format(number=asked + 1, total=limit, topic=topic,
+                                             language=LANGUAGES.get(language, "English"))
+        chat = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Patient: {_patient_line(patient)}\n\n{_transcript(messages) or '(no messages yet)'}"},
+        ]
+        for attempt in range(2):  # one retry on a network or API error
+            try:
+                reply = _chat(chat, timeout=12, extra={"reasoning_effort": "low"}).strip().strip('"').strip()
+                if reply and not reply.upper().startswith("DONE"):
+                    return reply[:500], "groq"
+                break
+            except Exception as e:  # network, auth, quota, bad response
+                log.warning("Groq next_question failed (attempt %s): %s", attempt + 1, type(e).__name__)
+    return fallback, "rules"
 
 
 # ── Extraction + summary ────────────────────────────────────────────────────

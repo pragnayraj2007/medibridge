@@ -283,6 +283,12 @@ if __name__ == "__main__":
 
 
 class IntakeLengthTest(unittest.TestCase):
+    def setUp(self):  # count questions with the scripted fallback, never a live AI call
+        from unittest import mock
+        patcher = mock.patch.dict("os.environ", {"GROQ_API_KEY": ""})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def msgs(self, n_asked, answer="mild cough"):
         from models import Message
         out = []
@@ -290,18 +296,35 @@ class IntakeLengthTest(unittest.TestCase):
             out += [Message(role="assistant", text=f"q{i}"), Message(role="patient", text=answer)]
         return out
 
-    def test_short_interview(self):
+    def test_basic_problem_gets_six_questions(self):
         import ai
-        import intake_agent
         from models import Patient
-        self.assertEqual(ai.MAX_QUESTIONS, 4)
-        asked = [intake_agent.next_question(Patient(), self.msgs(n))[0] for n in range(5)]
-        self.assertEqual(asked[:4], ai.FALLBACK_QUESTIONS)
-        self.assertEqual(asked[4], ai.DONE_MESSAGE)
+        self.assertEqual(ai.MAX_QUESTIONS, 6)
+        asked = [ai.next_question(Patient(), self.msgs(n))[0] for n in range(7)]
+        self.assertEqual(asked[:6], ai.FALLBACK_QUESTIONS)
+        self.assertEqual(asked[6], ai.DONE_MESSAGE)
 
-    def test_urgent_interview_is_shorter(self):
+    def test_serious_problem_gets_four_questions(self):
         import ai
-        import intake_agent
         from models import Patient
-        self.assertNotEqual(intake_agent.next_question(Patient(), self.msgs(1), urgent=True)[0], ai.DONE_MESSAGE)
-        self.assertEqual(intake_agent.next_question(Patient(), self.msgs(2), urgent=True)[0], ai.DONE_MESSAGE)
+        self.assertEqual(ai.URGENT_MAX_QUESTIONS, 4)
+        for n in range(4):
+            self.assertNotEqual(ai.next_question(Patient(), self.msgs(n), urgent=True)[0], ai.DONE_MESSAGE)
+        self.assertEqual(ai.next_question(Patient(), self.msgs(4), urgent=True)[0], ai.DONE_MESSAGE)
+        # flagged RED late in a basic interview: stops at 4
+        self.assertEqual(ai.next_question(Patient(), self.msgs(5), urgent=True)[0], ai.DONE_MESSAGE)
+
+    def test_route_uses_safety_engine_for_length(self):
+        try:
+            from fastapi.testclient import TestClient
+        except ImportError:
+            self.skipTest("FastAPI not installed")
+        import main
+        c = TestClient(main.app)
+        msgs = [{"role": "assistant", "text": f"q{i}"} if j == 0 else {"role": "patient", "text": "severe chest pain and I cannot breathe"}
+                for i in range(4) for j in range(2)]
+        r = c.post("/intake/next-question", json={"messages": msgs, "language": "en"}).json()
+        self.assertTrue(r["safety"]["urgent"])
+        self.assertTrue(r["done"])
+        r = c.post("/intake/next-question", json={"messages": msgs[:6], "language": "en"}).json()
+        self.assertFalse(r["done"])
