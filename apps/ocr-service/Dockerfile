@@ -1,4 +1,4 @@
-# Hugging Face Spaces (Docker SDK). Build downloads the OCR models once so requests are fast.
+# Runs the OCR service in any Docker host (Modal uses modal_app.py instead). Build downloads the OCR models once.
 FROM python:3.11-slim
 RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libgomp1 \
     && rm -rf /var/lib/apt/lists/*

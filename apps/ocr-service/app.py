@@ -1,4 +1,4 @@
-"""MediBridge OCR service: PaddleOCR 3.x behind a small HTTP API (runs on Hugging Face Spaces).
+"""MediBridge OCR service: PaddleOCR 3.x behind a small HTTP API (deployed on Modal: modal_app.py; the Dockerfile runs it anywhere else).
 
 POST /ocr  {"file": "<base64>", "fileType": 0 (PDF) | 1 (image)}
            Authorization: Bearer <OCR_TOKEN>
