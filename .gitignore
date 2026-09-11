@@ -36,3 +36,4 @@ Thumbs.db
 # Expo web export copied in at deploy time (apps/patient-app/export-web.bat)
 apps/doctor-dashboard/public/patient/
 .vercel/
+_to_delete/

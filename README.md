@@ -122,13 +122,14 @@ Everything opens from one URL (the `doctor-dashboard` Vercel project):
 | `/doctor` | Doctor dashboard |
 | `/api/*` | Backend, proxied to the FastAPI Vercel project (`BACKEND_URL`) |
 
-First-time setup:
+First-time setup (Windows, double-click the scripts in the repo root):
 
 1. **Supabase** — create a project, run `apps/backend/supabase/schema.sql` in the SQL Editor, copy the Project URL and a secret key.
-2. **Backend** — `cd apps/backend`, `npx vercel deploy --prod` (FastAPI is detected from `main.py`). Add env vars `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (and `GROQ_API_KEY`) with `npx vercel env add <NAME> production`, then deploy again.
-3. **Site** — run `export-web.bat` in the patient app, then `cd apps/doctor-dashboard`, `npx vercel env add BACKEND_URL production` (the backend's production URL), `npx vercel deploy --prod`.
+2. `vercel-setup.bat` — logs in to Vercel and creates the projects `medibridge-api` (backend) and `medibridge` (site).
+3. In Vercel → `medibridge-api` → Settings → Environment Variables: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (and `GROQ_API_KEY`). Then `deploy-api.bat`.
+4. In Vercel → `medibridge` → Environment Variables: `BACKEND_URL` = the backend's production URL. Then `deploy-site.bat` (builds the patient web app into `/patient` and deploys the site).
 
-Later updates: double-click `deploy.bat` in the repo root.
+Later updates: `deploy.bat` (backend, then site).
 
 The Vercel backend needs Supabase — serverless instances don't share memory.
 
