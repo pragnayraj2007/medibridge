@@ -37,3 +37,5 @@ Thumbs.db
 apps/doctor-dashboard/public/patient/
 .vercel/
 _to_delete/
+local-secrets.txt
+set-api-env.bat

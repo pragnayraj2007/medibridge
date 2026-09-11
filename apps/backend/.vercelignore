@@ -4,3 +4,4 @@ __pycache__/
 tests/
 .env
 .env*.local
+local-secrets.txt
