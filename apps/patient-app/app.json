@@ -15,7 +15,10 @@
       "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#EEF5FF"
-      }
+      },
+      "permissions": [
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -23,7 +26,13 @@
     },
     "plugins": [
       "expo-router",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "MediBridge uses the microphone so you can answer the intake questions by voice."
+        }
+      ]
     ]
   }
 }

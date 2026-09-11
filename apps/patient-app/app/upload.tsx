@@ -1,12 +1,16 @@
-// Screen 6: Upload Documents
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native'
+// Consultation step 4: documents. Each file goes to the backend: upload -> OCR (PaddleOCR)
+// -> multimodal analysis (Gemini). The patient sees the real status of every stage and can
+// always continue; a failed document never blocks the consultation.
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { useState } from 'react'
+import * as DocumentPicker from 'expo-document-picker'
+import { useEffect, useState } from 'react'
 import { C, S } from '../constants/theme'
+import { api, errorText, fileFormData, UploadedDocument } from '../lib/api'
 import { useIntake } from '../lib/intake'
-
+import { useSession } from '../lib/session'
 
 const DOC_TYPES = [
   { icon: 'document-text-outline', label: 'Prescription', color: '#1565C0' },
@@ -14,114 +18,156 @@ const DOC_TYPES = [
   { icon: 'scan-outline', label: 'X-Ray / Scan', color: '#8E24AA' },
   { icon: 'medical-outline', label: 'Other', color: '#F57C00' },
 ]
+const MAX_BYTES = 4 * 1024 * 1024
+const STAGES = ['Uploading', 'Reading text (OCR)', 'Multimodal analysis', 'Saving to your case']
+const STAGE_STATUS: Record<string, string> = { done: 'done', empty: 'no text found', not_configured: 'not available', failed: 'failed' }
 
 export default function Upload() {
   const router = useRouter()
-  const { documents: files, update } = useIntake()
-  const [note, setNote] = useState(false)
+  const { session } = useSession()
+  const { documents, update } = useIntake()
+  const [docType, setDocType] = useState('Lab Report')
+  const [busy, setBusy] = useState(false)
+  const [stage, setStage] = useState(0)
+  const [error, setError] = useState<string | null>(null)
 
-  const removeFile = (i: number) => update(s => ({ documents: s.documents.filter((_, idx) => idx !== i) }))
+  // Stage labels advance while the single request runs; the real per-stage result is shown after
+  useEffect(() => {
+    if (!busy) return
+    setStage(0)
+    const t = setInterval(() => setStage(s => Math.min(s + 1, STAGES.length - 1)), 2500)
+    return () => clearInterval(t)
+  }, [busy])
+
+  const pick = async () => {
+    setError(null)
+    const res = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true, multiple: false })
+    if (res.canceled || !res.assets?.length) return
+    const f = res.assets[0]
+    if (f.size && f.size > MAX_BYTES) return setError('That file is larger than 4 MB. Please choose a smaller file or photo.')
+    if (!session) return setError('Please register first.')
+    setBusy(true)
+    try {
+      const form = await fileFormData(
+        { uri: f.uri, name: f.name || 'document', type: f.mimeType || 'application/octet-stream', webFile: (f as { file?: Blob }).file ?? null },
+        { doc_type: docType },
+      )
+      const doc = await api.uploadDocument(session, form)
+      update(s => ({ documents: [...s.documents, doc], result: null }))
+    } catch (e) {
+      setError(errorText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = (id: string) => update(s => ({ documents: s.documents.filter(d => d.id !== id), result: null }))
 
   return (
     <SafeAreaView style={S.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <TouchableOpacity style={styles.back} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.back} onPress={() => router.back()} accessibilityLabel="Back">
           <Ionicons name="arrow-back" size={22} color={C.textDark} />
         </TouchableOpacity>
-        <View style={styles.stepBadge}><Text style={styles.stepText}>5 of 8</Text></View>
-        <View style={styles.progressBar}><View style={[styles.progressFill, { width: '62.5%' }]} /></View>
+        <View style={styles.stepBadge}><Text style={styles.stepText}>4 of 5</Text></View>
+        <View style={styles.progressBar}><View style={[styles.progressFill, { width: '80%' }]} /></View>
 
-        {/* Icon */}
-        <View style={styles.iconCircle}>
-          <Ionicons name="cloud-upload-outline" size={38} color={C.primary} />
-        </View>
-        <Text style={styles.title}>Upload Documents</Text>
-        <Text style={styles.subtitle}>Share any recent medical records to help your doctor prepare</Text>
+        <Text style={styles.title}>Add Medical Documents</Text>
+        <Text style={styles.subtitle}>Prescriptions, lab reports or scan reports help your doctor prepare. Optional.</Text>
 
-        {/* Drop zone */}
-        <TouchableOpacity style={styles.dropZone} onPress={() => setNote(true)}>
-          <Ionicons name="cloud-upload-outline" size={32} color={C.primary} />
-          <Text style={styles.dropTitle}>Tap to upload</Text>
-          <Text style={styles.dropSub}>PDF, JPG, PNG · Max 10MB each</Text>
-          {note && <Text style={styles.dropNote}>Document reading (OCR) arrives in the next update — tap Continue for now.</Text>}
-        </TouchableOpacity>
-
-        {/* Doc type pills */}
-        <Text style={styles.sectionLabel}>Document Type</Text>
+        <Text style={styles.sectionLabel}>Document type</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeRow}>
           {DOC_TYPES.map(d => (
-            <TouchableOpacity key={d.label} style={styles.typePill}>
+            <TouchableOpacity key={d.label} style={[styles.typePill, docType === d.label && { borderColor: d.color, backgroundColor: C.primaryBg }]} onPress={() => setDocType(d.label)}>
               <Ionicons name={d.icon as any} size={16} color={d.color} />
               <Text style={[styles.typePillText, { color: d.color }]}>{d.label}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        {/* Uploaded files */}
-        {files.length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>Uploaded ({files.length})</Text>
-            <View style={styles.fileList}>
-              {files.map((f, i) => (
-                <View key={i} style={styles.fileRow}>
-                  <View style={styles.fileIcon}>
-                    <Ionicons name="document-text" size={20} color={C.primary} />
-                  </View>
-                  <View style={styles.fileMeta}>
-                    <Text style={styles.fileName} numberOfLines={1}>{f.name}</Text>
-                    <Text style={styles.fileSize}>{f.type ?? 'Document'}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => removeFile(i)}>
-                    <Ionicons name="close-circle" size={22} color={C.textGray} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Skip note */}
-        <Text style={styles.skipNote}>Don't have documents with you? That's okay — you can skip this step.</Text>
-
-        <TouchableOpacity style={[S.btn, { width: '100%', marginTop: 8 }]} onPress={() => router.push('/processing')}>
-          <Text style={S.btnText}>Continue</Text>
-          <Ionicons name="arrow-forward" size={18} color={C.white} />
+        <TouchableOpacity style={[styles.dropZone, busy && { opacity: 0.8 }]} onPress={pick} disabled={busy}>
+          {busy ? (
+            <>
+              <ActivityIndicator color={C.primary} />
+              <Text style={styles.dropTitle}>{STAGES[stage]}…</Text>
+              <View style={styles.stageRow}>
+                {STAGES.map((s, i) => <View key={s} style={[styles.stageDot, i <= stage && { backgroundColor: C.primary }]} />)}
+              </View>
+            </>
+          ) : (
+            <>
+              <Ionicons name="cloud-upload-outline" size={32} color={C.primary} />
+              <Text style={styles.dropTitle}>Tap to choose a file or photo</Text>
+              <Text style={styles.dropSub}>PDF, JPG, PNG, WEBP · up to 4 MB</Text>
+            </>
+          )}
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.skipBtn} onPress={() => router.push('/processing')}>
-          <Text style={styles.skipBtnText}>Skip for now</Text>
+        {error && (
+          <View style={styles.errorBox}>
+            <Ionicons name="alert-circle-outline" size={18} color="#C62828" />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+
+        {documents.length > 0 && <Text style={styles.sectionLabel}>Added to this consultation ({documents.length})</Text>}
+        <View style={styles.fileList}>
+          {documents.map(d => <DocRow key={d.id} d={d} onRemove={() => remove(d.id)} />)}
+        </View>
+
+        <TouchableOpacity style={[S.btn, { width: '100%', marginTop: 8, opacity: busy ? 0.5 : 1 }]} onPress={() => router.push('/processing')} disabled={busy}>
+          <Text style={S.btnText}>{documents.length ? 'Continue' : 'Continue without documents'}</Text>
+          <Ionicons name="arrow-forward" size={18} color={C.white} />
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   )
 }
 
+function DocRow({ d, onRemove }: { d: UploadedDocument; onRemove: () => void }) {
+  const ok = d.status === 'processed' || d.status === 'partial'
+  return (
+    <View style={styles.fileRow}>
+      <View style={[styles.fileIcon, !ok && { backgroundColor: '#FFF3E0' }]}>
+        <Ionicons name={ok ? 'checkmark-circle' : 'alert-circle'} size={20} color={ok ? C.green : '#EF6C00'} />
+      </View>
+      <View style={styles.fileMeta}>
+        <Text style={styles.fileName} numberOfLines={1}>{d.name}</Text>
+        <Text style={styles.fileSub}>{d.doc_type ?? 'Document'} · OCR {STAGE_STATUS[d.ocr_status ?? 'failed']} · analysis {STAGE_STATUS[d.analysis_status ?? 'failed']}</Text>
+        <Text style={styles.fileMsg}>{d.message}</Text>
+      </View>
+      <TouchableOpacity onPress={onRemove} accessibilityLabel="Remove from this consultation">
+        <Ionicons name="close-circle" size={22} color={C.textGray} />
+      </TouchableOpacity>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 32 },
   back: { marginBottom: 16 },
-  stepBadge: { alignSelf: 'flex-start', backgroundColor: C.primaryBg, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 10 },
+  stepBadge: { alignSelf: 'flex-start', backgroundColor: C.white, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 10 },
   stepText: { color: C.primary, fontSize: 12, fontWeight: '600' },
-  progressBar: { height: 6, backgroundColor: C.border, borderRadius: 3, marginBottom: 28 },
+  progressBar: { height: 6, backgroundColor: C.border, borderRadius: 3, marginBottom: 24 },
   progressFill: { height: 6, backgroundColor: C.primary, borderRadius: 3 },
-  iconCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: C.primaryBg, alignItems: 'center', justifyContent: 'center', marginBottom: 16, alignSelf: 'center' },
-  title: { fontSize: 26, fontWeight: '800', color: C.textDark, textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 14, color: C.textGray, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-  dropZone: { borderWidth: 2, borderColor: C.primary, borderStyle: 'dashed', borderRadius: 20, padding: 32, alignItems: 'center', gap: 8, backgroundColor: C.primaryBg, marginBottom: 20 },
-  dropTitle: { fontSize: 16, fontWeight: '700', color: C.primary },
-  dropSub: { fontSize: 12, color: C.textGray },
-  dropNote: { fontSize: 12, color: C.textMid, textAlign: 'center', marginTop: 6 },
+  title: { fontSize: 24, fontWeight: '800', color: C.textDark, marginBottom: 6 },
+  subtitle: { fontSize: 14, color: C.textGray, marginBottom: 20, lineHeight: 20 },
   sectionLabel: { fontSize: 13, fontWeight: '700', color: C.textDark, marginBottom: 10 },
-  typeRow: { gap: 10, marginBottom: 20 },
-  typePill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.white, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: C.border },
+  typeRow: { gap: 10, marginBottom: 16 },
+  typePill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.white, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1.5, borderColor: C.border },
   typePillText: { fontSize: 13, fontWeight: '600' },
-  fileList: { gap: 10, marginBottom: 20 },
+  dropZone: { borderWidth: 2, borderColor: C.primary, borderStyle: 'dashed', borderRadius: 20, padding: 28, alignItems: 'center', gap: 8, backgroundColor: C.white, marginBottom: 16 },
+  dropTitle: { fontSize: 15, fontWeight: '700', color: C.primary },
+  dropSub: { fontSize: 12, color: C.textGray },
+  stageRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
+  stageDot: { width: 28, height: 4, borderRadius: 2, backgroundColor: C.border },
+  errorBox: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: '#FFEBEE', borderRadius: 12, padding: 12, marginBottom: 14 },
+  errorText: { flex: 1, color: '#B71C1C', fontSize: 13, lineHeight: 18 },
+  fileList: { gap: 10, marginBottom: 16 },
   fileRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.white, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.border },
-  fileIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.primaryBg, alignItems: 'center', justifyContent: 'center' },
+  fileIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
   fileMeta: { flex: 1 },
   fileName: { fontSize: 14, fontWeight: '600', color: C.textDark },
-  fileSize: { fontSize: 12, color: C.textGray, marginTop: 2 },
-  skipNote: { fontSize: 13, color: C.textGray, textAlign: 'center', marginBottom: 16, lineHeight: 19 },
-  skipBtn: { alignItems: 'center', paddingVertical: 14 },
-  skipBtnText: { color: C.textGray, fontSize: 14 },
+  fileSub: { fontSize: 11, color: C.textGray, marginTop: 2 },
+  fileMsg: { fontSize: 12, color: C.textMid, marginTop: 4, lineHeight: 16 },
 })

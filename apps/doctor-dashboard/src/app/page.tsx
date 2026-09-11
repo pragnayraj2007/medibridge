@@ -15,8 +15,8 @@ export default function Home() {
         <div className="text-center mt-8 mb-12">
           <h1 className="text-4xl font-extrabold text-blue-950 mb-3">Your Health, Our Bridge</h1>
           <p className="text-gray-500 max-w-xl mx-auto">
-            Patients share their symptoms before the visit. A deterministic safety check flags urgency, and the doctor
-            sees a prioritised, AI-assisted summary.
+            Patients describe their symptoms by voice or text and add their reports. A deterministic safety check sets
+            urgency, the earliest suitable nearby doctor is booked, and the doctor sees one fused, AI-assisted case.
           </p>
         </div>
 
@@ -25,23 +25,23 @@ export default function Home() {
           <a href="/patient" className="group bg-white border border-blue-100 rounded-2xl p-7 shadow-sm hover:shadow-md hover:border-blue-300 transition">
             <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center mb-4 text-2xl">📱</div>
             <h2 className="text-xl font-bold text-gray-900 mb-1">Patient App</h2>
-            <p className="text-sm text-gray-500 mb-5">Choose a language, answer a few questions, and get clear guidance. Works best on a phone.</p>
-            <span className="text-blue-600 font-semibold text-sm group-hover:underline">Start intake →</span>
+            <p className="text-sm text-gray-500 mb-5">Your patient ID and QR, appointments, past cases and a voice or text consultation. Works best on a phone.</p>
+            <span className="text-blue-600 font-semibold text-sm group-hover:underline">Open patient app →</span>
           </a>
 
           <a href="/doctor" className="group bg-white border border-blue-100 rounded-2xl p-7 shadow-sm hover:shadow-md hover:border-blue-300 transition">
             <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center mb-4 text-2xl">🩺</div>
             <h2 className="text-xl font-bold text-gray-900 mb-1">Doctor Dashboard</h2>
-            <p className="text-sm text-gray-500 mb-5">Live case list sorted by urgency, with Safety Engine reasons, AI summary, and the full intake.</p>
-            <span className="text-blue-600 font-semibold text-sm group-hover:underline">Open dashboard →</span>
+            <p className="text-sm text-gray-500 mb-5">Sign in to see cases and appointments by urgency, Safety Engine reasons, fused documents and history, and doctor availability.</p>
+            <span className="text-blue-600 font-semibold text-sm group-hover:underline">Doctor sign-in →</span>
           </a>
         </div>
 
         <div className="mt-10 grid sm:grid-cols-3 gap-4 text-center">
           {[
-            ['RED', 'bg-red-500', 'Urgent — tell staff now'],
-            ['YELLOW', 'bg-yellow-400', 'Priority — seen soon'],
-            ['GREEN', 'bg-green-500', 'Routine — seen in turn'],
+            ['RED', 'bg-red-500', 'Urgent — earliest slot'],
+            ['YELLOW', 'bg-yellow-400', 'Priority — ahead of routine'],
+            ['GREEN', 'bg-green-500', 'Routine — nearest doctor'],
           ].map(([level, dot, text]) => (
             <div key={level} className="bg-white/70 border border-gray-100 rounded-xl py-3 text-sm text-gray-600 flex items-center justify-center gap-2">
               <span className={`w-2.5 h-2.5 rounded-full ${dot}`} />

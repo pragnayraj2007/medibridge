@@ -1,19 +1,19 @@
-// Screen 1: Welcome
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native'
-import { useRouter } from 'expo-router'
+// Welcome. A patient already registered on this device goes straight to Home.
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
+import { Redirect, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { C, S } from '../constants/theme'
-import { useIntake } from '../lib/intake'
+import { useSession } from '../lib/session'
 
 export default function Welcome() {
   const router = useRouter()
-  const { reset } = useIntake()
-  // Always start a clean intake, even if a previous demo run was abandoned midway
-  const start = () => {
-    reset()
-    router.push('/language')
+  const { ready, session } = useSession()
+  if (!ready) {
+    return <SafeAreaView style={[S.screen, { alignItems: 'center', justifyContent: 'center' }]}><ActivityIndicator color={C.primary} /></SafeAreaView>
   }
+  if (session) return <Redirect href="/home" />
+  const start = () => router.push('/auth')
   return (
     <SafeAreaView style={S.screen}>
       <View style={styles.container}>
@@ -39,7 +39,8 @@ export default function Welcome() {
         {/* Text */}
         <Text style={styles.title}>Welcome</Text>
         <Text style={styles.subtitle}>
-          Your health story matters. We'll help collect your information before you meet your doctor.
+          Tell us how you feel in your own words, by voice or text. We check it for urgent signs, book the right
+          doctor at the earliest suitable time, and share a clear summary with them.
         </Text>
 
         {/* Buttons */}
@@ -48,14 +49,9 @@ export default function Welcome() {
           <Ionicons name="arrow-forward" size={18} color={C.white} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.btnSecondary} onPress={start}>
-          <Ionicons name="mic-outline" size={18} color={C.primary} />
-          <Text style={styles.btnSecondaryText}>Talk to us</Text>
-        </TouchableOpacity>
-
         <View style={styles.langNote}>
-          <Ionicons name="globe-outline" size={14} color={C.textGray} />
-          <Text style={styles.langNoteText}>Available in multiple languages</Text>
+          <Ionicons name="mic-outline" size={14} color={C.textGray} />
+          <Text style={styles.langNoteText}>Voice or text · 6 languages</Text>
         </View>
       </View>
     </SafeAreaView>

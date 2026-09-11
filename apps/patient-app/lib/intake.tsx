@@ -1,25 +1,25 @@
-// Intake answers shared across screens for one patient session (in memory only).
+// One consultation's answers, shared across the intake screens (in memory only).
+// The patient's identity and history are persistent (lib/session.tsx + Supabase).
 import { createContext, ReactNode, useCallback, useContext, useState } from 'react'
-import type { CaseResponse, DocumentMeta, Message, Patient } from './api'
+import type { CaseResponse, Message, UploadedDocument } from './api'
 
 type IntakeState = {
   language: string
-  patient: Patient
   messages: Message[]
-  documents: DocumentMeta[]
+  documents: UploadedDocument[]
   result: CaseResponse | null
 }
 
 type Update = Partial<IntakeState> | ((s: IntakeState) => Partial<IntakeState>)
 
-const initial: IntakeState = { language: 'en', patient: {}, messages: [], documents: [], result: null }
+const initial: IntakeState = { language: 'en', messages: [], documents: [], result: null }
 
-const IntakeContext = createContext<(IntakeState & { update: (u: Update) => void; reset: () => void }) | null>(null)
+const IntakeContext = createContext<(IntakeState & { update: (u: Update) => void; reset: (language?: string) => void }) | null>(null)
 
 export function IntakeProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<IntakeState>(initial)
   const update = useCallback((u: Update) => setState(s => ({ ...s, ...(typeof u === 'function' ? u(s) : u) })), [])
-  const reset = useCallback(() => setState(initial), [])
+  const reset = useCallback((language?: string) => setState({ ...initial, language: language ?? initial.language }), [])
   return <IntakeContext.Provider value={{ ...state, update, reset }}>{children}</IntakeContext.Provider>
 }
 

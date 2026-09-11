@@ -49,3 +49,20 @@ export const TRIAGE = {
   YELLOW: { color: '#F9A825', text: '#F57F17', bg: '#FFFDE7', label: 'Priority' },
   GREEN: { color: '#43A047', text: '#2E7D32', bg: '#E8F5E9', label: 'Routine' },
 } as const
+
+export const APPOINTMENT_STATUS: Record<string, string> = {
+  scheduled: 'Scheduled',
+  confirmed: 'Confirmed',
+  in_progress: 'In consultation',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+}
+
+export const LANGUAGES = [
+  { code: 'en', label: 'English', native: 'English' },
+  { code: 'hi', label: 'Hindi', native: 'हिंदी' },
+  { code: 'te', label: 'Telugu', native: 'తెలుగు' },
+  { code: 'ta', label: 'Tamil', native: 'தமிழ்' },
+  { code: 'kn', label: 'Kannada', native: 'ಕನ್ನಡ' },
+  { code: 'mr', label: 'Marathi', native: 'मराठी' },
+]

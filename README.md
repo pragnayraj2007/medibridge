@@ -1,189 +1,95 @@
 # MediBridge
 
-AI-assisted clinical intake and triage platform. Reduces the gap between patients and clinicians by structuring symptom information and prioritising urgency — without replacing doctors.
-
----
+AI-assisted clinical intake, triage and appointment booking for a hackathon. Patients describe how they feel by voice or text and add their reports. A deterministic Safety Engine sets the urgency, a deterministic scheduler books the earliest suitable nearby doctor, and the doctor sees one fused, AI-summarised case. The doctor makes every clinical decision.
 
 ## Demo
 
 | Client | Where |
 |---|---|
-| Patient (primary) | Expo app on an Android phone — Expo Go or the APK from `eas build` (see below) |
+| Patient (primary) | Expo app on Android (Expo Go or an APK from `eas build`) |
 | Patient (fallback) | https://medibridge-xi.vercel.app/patient |
-| Doctor | https://medibridge-xi.vercel.app/doctor (desktop browser) |
+| Doctor | https://medibridge-xi.vercel.app/doctor (sign in with a demo doctor account) |
 | Backend API | https://medibridge-api-rose.vercel.app (`/health`, `/docs`) |
 
-Check the whole path (phone-style API calls → Supabase → doctor site) with `smoke-test.bat`.
+`smoke-test.bat` checks the whole path (patient API → Supabase → scheduling → doctor site). Set `MEDIBRIDGE_DEMO_PASSWORD` first.
 
----
+Demo script: open `/patient` and create a patient ID. Home shows the ID and QR code, appointments and previous cases. Start a consultation, pick a language, answer by voice or text, and upload a report. Chest pain at 62 comes back RED with an urgent appointment. Dr. Arjun Mehta (1.2 km) is busy, so the case goes to Dr. Ananya Rao (2.1 km), who has the earliest slot. On `/doctor`, sign in and open the case. Switch Dr. Mehta to Available, submit another case, and it goes to him. "Reset demo scenario" restores the starting state.
 
 ## Architecture
 
 ```
-Patient App ──┐
-              ├──→ Backend (Vercel) ──→ Supabase
-Doctor Web ───┘         │
-                        ├──→ Groq (clinical agent)
-                        ├──→ WHO Safety Engine (deterministic)
-                        └──→ planned: Gemini, PaddleOCR, Sarvam STT/TTS
+Patient app (Expo) ──┐                        ┌── Groq gpt-oss-120b: questions, extraction, summary
+                     ├──→ FastAPI (Vercel) ───┼── Safety Engine (deterministic, final triage)
+Doctor web (Next.js)─┘     via /api proxy     ├── Scheduler (deterministic: priority, availability, distance)
+                                              ├── Sarvam: speech-to-text (Saaras) / text-to-speech (Bulbul)
+                                              ├── PaddleOCR service (optional) + Gemini multimodal
+                                              └── Supabase: patients, doctors, cases, appointments, documents
 ```
 
-Triage flow: `Patient input → AI extraction → Safety Engine → RED/YELLOW/GREEN → Doctor`
+`submit → extraction → data fusion → Safety Engine → case → priority → available doctors → earliest valid slot → appointment`
 
-The LLM never makes the final triage decision. The deterministic Safety Engine does.
-
----
+- **Persistent patient ID** (`PAT-XXXXXXXX`), created once and stored in Supabase. The QR code encodes only this ID. The device keeps a random token, stored hashed on the server, and history is readable only with that token or by a signed-in doctor.
+- **Intake chat**: one open question at a time from Groq, in the chosen language (en, hi, te, ta, kn, mr). No quick-reply chips. Answers are typed or spoken. Questions can be read aloud.
+- **Voice**: audio goes to the backend and on to Sarvam. Models are set with `SARVAM_STT_MODEL` / `SARVAM_TTS_MODEL`. Any failure (permission, recording, network, API) shows a note and typing continues.
+- **Documents**: PDF, JPG, PNG and WEBP up to 4 MB. The pipeline is upload → PaddleOCR (if `PADDLEOCR_URL` is set) → Gemini structured findings. Each stage reports done, empty, not available or failed, so a failed document never blocks the intake. Originals are kept in a private Supabase bucket.
+- **Data fusion** (`fusion.py`): combines profile, conversation, voice transcripts, extraction, documents (OCR + Gemini), previous cases and vitals. Contradictions (age, pregnancy, timeline versus a previous case) and unconfirmed items (medicines or allergies found only in a document) are kept as `conflicts`. The Groq summary must state both sides.
+- **Safety Engine** (`safety_engine.py`, WHO/ICRC/MSF IITT adult criteria): keyword flags ∪ AI flags ∪ document flags → RED/YELLOW/GREEN. Other sources can add flags; nothing removes a keyword flag. The AI summary never sets urgency.
+- **Scheduling** (`scheduling.py`, deterministic):
+  - Priority is RED 1, YELLOW 2, GREEN 3, and only doctors marked `available` are considered.
+  - RED gets the earliest slot. Within 5 minutes the closer doctor wins.
+  - YELLOW minimises wait + 2 min/km, starting 10 minutes out.
+  - GREEN minimises wait + 10 min/km, starting 2 hours out, so routine bookings never take near-term slots. GREEN patients can pick a later time.
+  - Double booking is blocked by a unique index, and a clash triggers a retry.
+  - Every decision stores each doctor considered and a readable reason.
+- **Doctor side**:
+  - Demo login (PBKDF2 hashes, signed 12-hour tokens).
+  - Cases and appointments sorted by triage, then appointment time, then creation time.
+  - Doctor availability controls.
+  - Case page with final triage and the rules that fired, the engine inputs, a separate AI summary, conflicts, document findings, previous cases, the conversation and appointment status buttons (scheduled → confirmed → in_progress → completed, or cancelled).
 
 ## Stack
 
-| Layer | Technology |
+Expo SDK 57 (React Native) · Next.js 14 · FastAPI on Vercel · Supabase · Groq `openai/gpt-oss-120b` · Gemini (`GEMINI_MODEL`, default `gemini-2.5-flash`) · PaddleOCR (self-hosted serving) · Sarvam Saaras v4 / Bulbul v3
+
+## Run locally
+
+```bash
+# Backend (all keys optional; without Supabase it uses memory + seeded demo doctors)
+cd apps/backend && python -m venv .venv && .venv/bin/pip install -r requirements.txt
+cp .env.example .env
+.venv/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8000
+.venv/bin/python -m unittest discover -s tests      # Safety Engine, scheduling, fusion, auth, voice, documents
+
+# Doctor dashboard: http://localhost:3001/doctor (proxies /api to BACKEND_URL)
+cd apps/doctor-dashboard && npm install && npm run dev
+
+# Patient app (uses the deployed backend unless EXPO_PUBLIC_API_URL is set)
+cd apps/patient-app && npm install && npx expo start -c
+npx eas-cli@latest build -p android --profile preview   # installable APK
+```
+
+Database: in the Supabase SQL Editor run `apps/backend/supabase/schema.sql`, then `supabase/migrations/002_patients_appointments.sql`. The migration adds the tables, the private `documents` bucket and the three demo doctors. The demo doctor password is shared by the team and is not in this repo (only its hash is).
+
+PaddleOCR is too large for Vercel functions. To use it, run PaddleOCR / PaddleX serving elsewhere (`paddlex --serve --pipeline OCR`) and set `PADDLEOCR_URL`.
+
+## Deploy (Windows, from the repo root)
+
+- `set-api-env.bat` copies keys from `apps/backend/local-secrets.txt` (git-ignored) to the Vercel backend and deploys it.
+- `deploy-site.bat` builds the patient web app into `/patient` and deploys the site.
+
+| Where | Variables |
 |---|---|
-| Patient Frontend | React Native (Expo SDK 57) → Android (Expo Go / APK) + web fallback on Vercel |
-| Doctor Frontend | Next.js → Vercel |
-| Backend/API | FastAPI → Vercel (Python) |
-| Database | Supabase |
-| Clinical Agent | Groq `openai/gpt-oss-120b` |
-| Multimodal | Gemini (planned) |
-| OCR | PaddleOCR (planned) |
-| STT | Sarvam Saaras v4 (planned) |
-| TTS | Sarvam Bulbul v3 (planned) |
-| Triage | Deterministic WHO-based Safety Engine |
+| Vercel `medibridge-api` | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `SARVAM_API_KEY`, optional `PADDLEOCR_URL`, `AUTH_SECRET`, `SARVAM_*`, `GEMINI_MODEL`, `SCHED_LEAD_*_MIN`, `DEMO_PATIENT_LAT/LNG` |
+| Vercel `medibridge` | `BACKEND_URL` |
+| Patient app | `EXPO_PUBLIC_API_URL` (optional override) |
 
----
+Secrets exist only on the backend. Never commit `.env` or `local-secrets.txt`.
 
-## Project Structure
+## Demo limitations
 
-```
-medibridge/
-├── apps/
-│   ├── patient-app/        # Expo (React Native) — patient mobile app
-│   ├── doctor-dashboard/   # Next.js — clinician web dashboard
-│   └── backend/            # FastAPI — API, AI pipeline, Safety Engine
-│       ├── main.py           # API routes
-│       ├── safety_engine.py  # deterministic RED/YELLOW/GREEN (WHO IITT)
-│       ├── keywords.py       # danger-sign keyword safety net
-│       ├── ai.py             # Groq: intake questions, extraction, summary
-│       ├── storage.py        # Supabase REST, in-memory fallback
-│       ├── supabase/schema.sql
-│       └── tests/
-├── .env.example
-├── .gitignore
-└── README.md
-```
-
----
-
-## Setup
-
-### Prerequisites
-
-- Node.js 18+
-- Python 3.11+
-
-### Patient App (Android)
-
-```bash
-cd apps/patient-app
-npm install
-npx expo start -c          # scan the QR code with Expo Go on the phone
-```
-
-The app uses the deployed backend by default (`extra.apiUrl` in `app.config.js`), so the phone only needs internet.
-For a local backend: `EXPO_PUBLIC_API_URL=http://<PC-IP>:8000 npx expo start -c`.
-
-Installable APK (no Play Store, free Expo account): `npx eas-cli@latest build -p android --profile preview` (profiles in `eas.json`, package `com.medibridge.patient`).
-`check-android.bat` checks dependency versions, the resolved config and the Android bundle.
-
-### Doctor Dashboard
-
-```bash
-cd apps/doctor-dashboard
-npm install
-npm run dev        # http://localhost:3001/doctor — proxies /api to BACKEND_URL (default http://127.0.0.1:8000)
-```
-
-### Backend
-
-```bash
-cd apps/backend
-python -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt      # Windows: .venv\Scripts\python
-cp .env.example .env                                      # all keys optional for local dev
-.venv/bin/python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
-.venv/bin/python -m unittest discover -s tests            # Safety Engine tests
-```
-
-Without `SUPABASE_URL`/`SUPABASE_SERVICE_KEY` cases are kept in memory (lost on restart).
-Without `GROQ_API_KEY` the intake uses scripted questions and keyword-only extraction.
-For Supabase, run `supabase/schema.sql` once in the SQL editor. API docs: http://localhost:8000/docs
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/health` | status, storage mode, AI mode |
-| POST | `/intake/next-question` | next intake question + live safety check |
-| POST | `/cases` | submit intake → extraction → Safety Engine → stored case + patient guidance |
-| GET | `/cases?triage_level=&status=` | doctor case list (newest first) |
-| GET | `/cases/{id}` | case detail |
-| PATCH | `/cases/{id}` | set status: `new` / `reviewed` / `follow_up` |
-
-### Safety Engine
-
-`safety_engine.py` applies the WHO/ICRC/MSF [Interagency Integrated Triage Tool](https://www.who.int/tools/triage) (adult) criteria to flags, age, pregnancy and vitals. Flags come from the keyword matcher **and** Groq; Groq can add flags from a fixed vocabulary but never sets the level. Every result lists the rules that fired. Extra conservative rules are labelled `MediBridge`. Thresholds need clinical review before real use.
-
----
-
-## Deployment (Vercel + Supabase)
-
-Everything opens from one URL (the `doctor-dashboard` Vercel project):
-
-| Path | What |
-|---|---|
-| `/` | Home — links to both apps |
-| `/patient` | Patient app (Expo web export, built by `apps/patient-app/export-web.bat`) |
-| `/doctor` | Doctor dashboard |
-| `/api/*` | Backend, proxied to the FastAPI Vercel project (`BACKEND_URL`) |
-
-First-time setup (Windows, double-click the scripts in the repo root):
-
-1. **Supabase** — create a project, run `apps/backend/supabase/schema.sql` in the SQL Editor, copy the Project URL and a secret key.
-2. `vercel-setup.bat` — logs in to Vercel and creates the projects `medibridge-api` (backend) and `medibridge` (site).
-3. In Vercel → `medibridge-api` → Settings → Environment Variables: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (and `GROQ_API_KEY`). Then `deploy-api.bat`.
-4. In Vercel → `medibridge` → Environment Variables: `BACKEND_URL` = the backend's production URL. Then `deploy-site.bat` (builds the patient web app into `/patient` and deploys the site).
-
-Later updates: `deploy.bat` (backend, then site).
-
-The Vercel backend needs Supabase — serverless instances don't share memory.
-
-## Environment Variables
-
-| Where | Variable | Purpose |
-|---|---|---|
-| Vercel `medibridge-api` | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | Supabase project + secret key (server only) |
-| Vercel `medibridge-api` | `GROQ_API_KEY` (`GROQ_MODEL` optional) | AI questions/extraction; without it the app uses scripted questions |
-| Vercel `medibridge` | `BACKEND_URL` | Where the site proxies `/api/*` (build time) |
-| Patient app | `EXPO_PUBLIC_API_URL` (optional) | Override the backend URL (web export uses `/api`) |
-
-Secrets live only in Vercel and in `apps/backend/local-secrets.txt` (git-ignored; template: `local-secrets.example.txt`). `set-api-env.bat` copies that file into Vercel and redeploys the backend. Never commit `.env` or secrets; the frontends never see them.
-
----
-
-## Git Branches
-
-Work on a `feature/<topic>` branch and open a pull request into `main` (current: `feature/demo-readiness`).
-
----
-
-## Demo Flow
-
-1. Patient opens the Android app → answers the AI's questions (text; voice planned)
-2. AI extracts structured clinical data
-3. WHO Safety Engine classifies: RED / YELLOW / GREEN
-4. Patient sees clear guidance
-5. Doctor opens dashboard → sees prioritised case list
-6. Doctor reviews AI summary + triage → makes clinical decision
-
----
-
-## Team
-
-MediBridge — Hackathon 2026
+- Distances use one fixed demo patient location. Patient GPS is not used yet.
+- There are no working-hours calendars, and urgent cases do not bump existing bookings.
+- Doctor auth is demo-grade. A patient ID can only be reopened on the device that created it.
+- PaddleOCR needs a separately hosted service. Without it, Gemini reads the document directly.
+- Voice and document analysis need `SARVAM_API_KEY` and `GEMINI_API_KEY`. Without them the app says so and continues with text.
+- The Safety Engine thresholds and the scheduling rules need clinical review before any real use. This is a workflow tool, not a diagnostic system.

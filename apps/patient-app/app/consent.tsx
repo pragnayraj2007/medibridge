@@ -1,4 +1,4 @@
-// Screen 4: Consent
+// Consultation step 2: consent
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -9,8 +9,8 @@ import { C, S } from '../constants/theme'
 const POINTS = [
   { icon: 'lock-closed-outline', title: 'Your data is encrypted', sub: 'All health info is stored securely and never shared without permission.' },
   { icon: 'eye-off-outline', title: 'Private by default', sub: 'Only you and your treating doctor can view your information.' },
-  { icon: 'close-circle-outline', title: 'You can withdraw anytime', sub: 'Delete your data or opt out at any point, no questions asked.' },
-  { icon: 'document-text-outline', title: 'Used for care only', sub: 'Your information will only be used to assist your medical consultation.' },
+  { icon: 'mic-outline', title: 'Voice and documents', sub: 'Voice recordings are turned into text to answer your questions. Documents you upload are read to help your doctor.' },
+  { icon: 'document-text-outline', title: 'Used for care only', sub: 'Your information is used to prioritise and prepare your consultation. A doctor makes every clinical decision.' },
 ]
 
 export default function Consent() {
@@ -25,8 +25,8 @@ export default function Consent() {
           <Ionicons name="arrow-back" size={22} color={C.textDark} />
         </TouchableOpacity>
 
-        <View style={styles.stepBadge}><Text style={styles.stepText}>3 of 8</Text></View>
-        <View style={styles.progressBar}><View style={[styles.progressFill, { width: '37.5%' }]} /></View>
+        <View style={styles.stepBadge}><Text style={styles.stepText}>2 of 5</Text></View>
+        <View style={styles.progressBar}><View style={[styles.progressFill, { width: '40%' }]} /></View>
 
         {/* Shield icon */}
         <View style={styles.shieldWrap}>

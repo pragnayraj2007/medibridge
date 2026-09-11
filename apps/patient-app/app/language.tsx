@@ -1,19 +1,10 @@
-// Screen 2: Choose Language
+// Consultation step 1: language for the conversation, voice and replies
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { C, S } from '../constants/theme'
+import { C, LANGUAGES as LANGS, S } from '../constants/theme'
 import { useIntake } from '../lib/intake'
-
-const LANGS = [
-  { code: 'en', label: 'English', native: 'English' },
-  { code: 'hi', label: 'Hindi', native: 'हिंदी' },
-  { code: 'te', label: 'Telugu', native: 'తెలుగు' },
-  { code: 'ta', label: 'Tamil', native: 'தமிழ்' },
-  { code: 'kn', label: 'Kannada', native: 'ಕನ್ನಡ' },
-  { code: 'mr', label: 'Marathi', native: 'मराठी' },
-]
 
 export default function Language() {
   const router = useRouter()
@@ -25,9 +16,12 @@ export default function Language() {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.stepBadge}><Text style={styles.stepText}>1 of 8</Text></View>
+          <TouchableOpacity style={{ marginBottom: 12 }} onPress={() => router.back()} accessibilityLabel="Back">
+            <Ionicons name="arrow-back" size={22} color={C.textDark} />
+          </TouchableOpacity>
+          <View style={styles.stepBadge}><Text style={styles.stepText}>1 of 5</Text></View>
           <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: '12.5%' }]} />
+            <View style={[styles.progressFill, { width: '20%' }]} />
           </View>
         </View>
 
@@ -36,7 +30,7 @@ export default function Language() {
           <Ionicons name="globe" size={36} color={C.primary} />
         </View>
         <Text style={styles.title}>Choose Your Language</Text>
-        <Text style={styles.subtitle}>Select the language you're most comfortable with</Text>
+        <Text style={styles.subtitle}>You can speak or type in this language</Text>
 
         {/* Language grid */}
         <View style={styles.grid}>
@@ -57,14 +51,8 @@ export default function Language() {
           ))}
         </View>
 
-        {/* Listen button */}
-        <TouchableOpacity style={styles.listenBtn}>
-          <Ionicons name="volume-high-outline" size={18} color={C.primary} />
-          <Text style={styles.listenText}>Listen to options</Text>
-        </TouchableOpacity>
-
         {/* Continue */}
-        <TouchableOpacity style={[S.btn, { width: '100%', marginTop: 16 }]} onPress={() => router.push('/auth')}>
+        <TouchableOpacity style={[S.btn, { width: '100%', marginTop: 16 }]} onPress={() => router.push('/consent')}>
           <Text style={S.btnText}>Continue</Text>
           <Ionicons name="arrow-forward" size={18} color={C.white} />
         </TouchableOpacity>
