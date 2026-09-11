@@ -25,7 +25,7 @@ SPACE = "medibridge-ocr"
 
 def read_secrets() -> dict:
     out = {}
-    for line in SECRETS.read_text(encoding="utf-8").splitlines():
+    for line in SECRETS.read_text(encoding="utf-8-sig").splitlines():
         if "=" in line:
             k, v = line.split("=", 1)
             out[k.strip()] = v.strip()
@@ -33,7 +33,7 @@ def read_secrets() -> dict:
 
 
 def add_secret(name: str, value: str) -> None:
-    text = SECRETS.read_text(encoding="utf-8")
+    text = SECRETS.read_text(encoding="utf-8-sig")
     lines = [ln for ln in text.splitlines() if not ln.startswith(name + "=")]
     lines.append(f"{name}={value}")
     SECRETS.write_text("\n".join(lines) + "\n", encoding="utf-8")
