@@ -102,7 +102,7 @@ Return a JSON object with exactly these keys:
   "medications": [strings],
   "allergies": [strings],
   "flags": [keys from the list below that the patient's words clearly indicate],
-  "summary": "3-5 sentence neutral clinical summary in English for the doctor. No diagnosis, no urgency level."
+  "summary": "3-5 sentence neutral clinical summary in English for the doctor. No diagnosis. Do not state or imply urgency, red flags or their absence - the Safety Engine decides urgency."
 Allowed flag keys:
 {vocab}"""
 
