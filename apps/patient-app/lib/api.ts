@@ -156,17 +156,66 @@ export async function fileFormData(file: { uri: string; name: string; type: stri
   return form
 }
 
-/** Reads a local file (recording or picked document) as base64. Native only. */
+type Legacy = {
+  readAsStringAsync: (u: string, o: { encoding: 'base64' }) => Promise<string>
+  copyAsync: (o: { from: string; to: string }) => Promise<void>
+  cacheDirectory: string | null
+}
+
+/** Reads a file through React Native's own networking (no file-system permission checks). */
+function readViaXhr(uri: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.onload = () => {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const url = String(reader.result || '')
+        const i = url.indexOf(',')
+        if (i > 0 && url.length > i + 1) resolve(url.slice(i + 1))
+        else reject(new Error('empty read'))
+      }
+      reader.onerror = () => reject(new Error('FileReader failed'))
+      reader.readAsDataURL(xhr.response)
+    }
+    xhr.onerror = () => reject(new Error('XHR failed'))
+    xhr.responseType = 'blob'
+    xhr.open('GET', uri, true)
+    xhr.send(null)
+  })
+}
+
+/** Reads a local file (recording or picked document) as base64. Native only.
+ *  Picked files can live where one API is not allowed to read them (Expo Go on Android),
+ *  so several ways are tried in turn. */
 export async function readBase64(uri: string): Promise<string> {
   const fileUri = uri.startsWith('/') ? `file://${uri}` : uri
-  try {
-    // Loaded lazily so the web bundle never touches the native file system module
-    const { File } = require('expo-file-system') as typeof import('expo-file-system')
-    const data = await (new File(fileUri) as unknown as { base64: () => Promise<string> }).base64()
-    if (data) return data
-  } catch {}
-  const legacy = require('expo-file-system/legacy') as { readAsStringAsync: (u: string, o: { encoding: 'base64' }) => Promise<string> }
-  return legacy.readAsStringAsync(fileUri, { encoding: 'base64' })
+  const errors: string[] = []
+  // Loaded lazily so the web bundle never touches the native file system module
+  const attempts: [string, () => Promise<string>][] = [
+    ['file', async () => {
+      const { File } = require('expo-file-system') as typeof import('expo-file-system')
+      return (new File(fileUri) as unknown as { base64: () => Promise<string> }).base64()
+    }],
+    ['legacy', () => (require('expo-file-system/legacy') as Legacy).readAsStringAsync(fileUri, { encoding: 'base64' })],
+    ['xhr', () => readViaXhr(fileUri)],
+    ['copy', async () => {
+      const legacy = require('expo-file-system/legacy') as Legacy
+      const to = `${legacy.cacheDirectory}upload-${Date.now()}`
+      await legacy.copyAsync({ from: fileUri, to })
+      return legacy.readAsStringAsync(to, { encoding: 'base64' })
+    }],
+  ]
+  for (const [name, read] of attempts) {
+    try {
+      const data = await read()
+      if (data) return data
+      errors.push(`${name}: empty`)
+    } catch (e) {
+      errors.push(`${name}: ${(e as Error)?.message ?? e}`.slice(0, 160))
+    }
+  }
+  console.warn('[MediBridge] could not read file', fileUri, errors)
+  throw new Error(errors.join(' | '))
 }
 
 export const api = {

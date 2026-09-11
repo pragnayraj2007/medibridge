@@ -62,8 +62,10 @@ export default function Upload() {
         let data: string
         try {
           data = await readBase64(f.uri)
-        } catch {
-          throw new FileProblem('Could not read that file. Please choose it again.')
+        } catch (e) {
+          // In development builds (Expo Go) show why, so a failing device can be diagnosed
+          const why = __DEV__ ? ` (${String((e as Error)?.message || '').slice(0, 300)})` : ''
+          throw new FileProblem(`Could not read that file. Please choose it again.${why}`)
         }
         if (data.length > MAX_BYTES * 1.37) throw new FileProblem(`That file is larger than ${MAX_LABEL}. Please choose a smaller file or photo.`)
         doc = await api.uploadDocumentJson(session, { file_base64: data, filename: f.name || 'document', mime: f.mimeType || null, doc_type: docType })
