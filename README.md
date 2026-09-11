@@ -4,6 +4,10 @@ AI-assisted clinical intake and triage platform. Reduces the gap between patient
 
 ---
 
+**Live demo:** https://medibridge-xi.vercel.app — patient app at `/patient`, doctor dashboard at `/doctor`.
+
+---
+
 ## Architecture
 
 ```
