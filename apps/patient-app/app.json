@@ -33,14 +33,6 @@
           "microphonePermission": "MediBridge uses the microphone so you can answer the intake questions by voice."
         }
       ]
-    ],
-    "extra": {
-      "apiUrl": "https://medibridge-api-rose.vercel.app",
-      "router": {},
-      "eas": {
-        "projectId": "d9e252f0-5d3d-438c-ba8e-c9da77871803"
-      }
-    },
-    "owner": "pragnayraj"
+    ]
   }
 }
