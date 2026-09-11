@@ -50,10 +50,17 @@ def modal(args: list[str], env: dict, hide: str | None = None) -> str:
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # Modal prints emoji; Windows consoles are cp1252
     s = read_secrets()
-    if not (s.get("MODAL_TOKEN_ID") and s.get("MODAL_TOKEN_SECRET")):
-        print("MODAL_TOKEN_ID / MODAL_TOKEN_SECRET missing from apps/backend/local-secrets.txt")
+    token_id, token_secret = s.get("MODAL_TOKEN_ID", ""), s.get("MODAL_TOKEN_SECRET", "")
+    # Also accept the pasted "modal token set --token-id ak-... --token-secret as-..." command
+    text = SECRETS.read_text(encoding="utf-8-sig")
+    if m := re.search(r"--token-id[ =](\S+)", text):
+        token_id = m.group(1)
+    if m := re.search(r"--token-secret[ =](\S+)", text):
+        token_secret = m.group(1)
+    if not (token_id.startswith("ak-") and token_secret.startswith("as-")):
+        print("Modal token not found: need MODAL_TOKEN_ID=ak-... and MODAL_TOKEN_SECRET=as-... in local-secrets.txt")
         return 1
-    env = {**os.environ, "MODAL_TOKEN_ID": s["MODAL_TOKEN_ID"], "MODAL_TOKEN_SECRET": s["MODAL_TOKEN_SECRET"],
+    env = {**os.environ, "MODAL_TOKEN_ID": token_id, "MODAL_TOKEN_SECRET": token_secret,
            "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8", "NO_COLOR": "1", "TERM": "dumb"}
     ocr_token = s.get("PADDLEOCR_TOKEN") or secrets.token_urlsafe(24)
 
