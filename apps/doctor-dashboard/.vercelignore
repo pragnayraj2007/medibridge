@@ -1,5 +1,6 @@
-node_modules/
-.next/
+/node_modules/
+/.next/
 .env*.local
 # old doctor route location (moved to src/app/doctor/case); clashes with /patient
-src/app/patient/
+/src/app/patient/
+# NOTE: patterns are anchored so public/patient/assets/node_modules (patient app fonts/images) is uploaded
