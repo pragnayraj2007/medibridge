@@ -314,6 +314,33 @@ class IntakeLengthTest(unittest.TestCase):
         # flagged RED late in a basic interview: stops at 4
         self.assertEqual(ai.next_question(Patient(), self.msgs(5), urgent=True)[0], ai.DONE_MESSAGE)
 
+    def test_fallback_questions_in_every_language(self):
+        import ai
+        from models import Patient
+        for lang in ai.LANGUAGES:
+            for key in ai.BASIC_PLAN + ai.SERIOUS_PLAN:
+                self.assertTrue(ai.QUESTIONS[key].get(lang), f"{key}/{lang}")
+        q = ai.next_question(Patient(), self.msgs(4), language="te")[0]
+        self.assertEqual(q, ai.QUESTIONS["conditions"]["te"])
+        q = ai.next_question(Patient(), self.msgs(1), language="hi", urgent=True)[0]
+        self.assertEqual(q, ai.QUESTIONS["onset_severity"]["hi"])
+
+    def test_second_model_used_when_first_fails(self):
+        from unittest import mock
+        import ai
+        from models import Patient
+        calls = []
+
+        def fake_chat(messages, **kw):
+            calls.append(kw.get("model"))
+            if kw.get("model") == ai.GROQ_MODEL:
+                raise RuntimeError("429")
+            return "Since when do you have this?"
+        with mock.patch.dict("os.environ", {"GROQ_API_KEY": "x"}), mock.patch.object(ai, "_chat", fake_chat):
+            q, source = ai.next_question(Patient(), self.msgs(1), language="en")
+        self.assertEqual((q, source), ("Since when do you have this?", "groq"))
+        self.assertEqual(calls, [ai.GROQ_MODEL, ai.GROQ_FALLBACK_MODEL])
+
     def test_route_uses_safety_engine_for_length(self):
         try:
             from fastapi.testclient import TestClient
