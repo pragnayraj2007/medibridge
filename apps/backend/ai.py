@@ -25,13 +25,15 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
 LANGUAGES = {"en": "English", "hi": "Hindi", "te": "Telugu", "ta": "Tamil", "kn": "Kannada", "mr": "Marathi"}
 
+# Short intake: at most MAX_QUESTIONS questions, related items asked together.
+MAX_QUESTIONS = int(os.getenv("INTAKE_MAX_QUESTIONS", "4"))
+URGENT_MAX_QUESTIONS = 2  # a danger sign is already flagged: get the patient to care faster
+
 FALLBACK_QUESTIONS = [
     "What is the main problem that brought you in today?",
-    "When did it start, and is it getting better or worse?",
-    "How bad is it on a scale of 1 to 10?",
-    "Do you have any other symptoms, like fever, vomiting, or trouble breathing?",
-    "Do you have any long-term conditions, like diabetes or high blood pressure?",
-    "Are you taking any medicines, and do you have any allergies?",
+    "When did it start, and how bad is it on a scale of 1 to 10?",
+    "Do you have any other symptoms, like fever, vomiting, dizziness or trouble breathing?",
+    "Do you have any long-term conditions, take any medicines, or have any allergies?",
 ]
 DONE_MESSAGE = "Thank you, I have what I need. Tap 'Done answering' to continue."
 
@@ -68,19 +70,25 @@ def _patient_line(p) -> str:
 # ── Intake conversation ─────────────────────────────────────────────────────
 
 NEXT_QUESTION_PROMPT = """You are MediBridge, a friendly intake assistant collecting information for a doctor before a clinic visit.
-Ask ONE short, simple question at a time, in {language}. Cover: main complaint, onset/duration, severity (1-10), associated symptoms, relevant history (conditions, medicines, allergies, pregnancy if relevant).
+Ask ONE short, simple question at a time, in {language}. The whole interview is at most {max_questions} questions and you have asked {asked} so far, so combine related items into one question (for example when it started and how bad it is from 1 to 10). In order of importance: main complaint; onset and severity; other symptoms; conditions, medicines and allergies (pregnancy if relevant). Skip anything the patient already told you.
 Patients answer in their own words, typed or spoken. Spoken answers are speech-to-text transcripts and may contain recognition errors: if an answer is unclear, ask them to repeat or clarify it.
 Never offer answer options or multiple-choice lists; ask open questions.
 Never diagnose, never say how urgent it is, never give treatment advice. If the patient describes an emergency, first tell them to alert staff immediately, then still ask your next question in the same reply.
-When you have enough information (usually 5-7 questions), reply exactly: DONE"""
+When you have enough information, or you reach the limit, reply exactly: DONE"""
 
 
-def next_question(patient, messages, language: str = "en") -> tuple[str, str]:
-    """Returns (question, source). Question == DONE_MESSAGE when intake is complete."""
+def next_question(patient, messages, language: str = "en", urgent: bool = False) -> tuple[str, str]:
+    """Returns (question, source). Question == DONE_MESSAGE when intake is complete.
+    Hard limits (not left to the model): MAX_QUESTIONS, or URGENT_MAX_QUESTIONS once the
+    Safety Engine has already flagged RED."""
     asked = sum(1 for m in messages if m.role == "assistant")
+    limit = min(MAX_QUESTIONS, URGENT_MAX_QUESTIONS) if urgent else MAX_QUESTIONS
+    if asked >= limit:
+        return DONE_MESSAGE, "rules"
     if ai_enabled():
         try:
-            prompt = NEXT_QUESTION_PROMPT.format(language=LANGUAGES.get(language, "English"))
+            prompt = NEXT_QUESTION_PROMPT.format(language=LANGUAGES.get(language, "English"),
+                                                 max_questions=limit, asked=asked)
             reply = _chat([
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": f"Patient: {_patient_line(patient)}\n\n{_transcript(messages) or '(no messages yet)'}"},

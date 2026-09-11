@@ -280,3 +280,26 @@ class EndToEndTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class IntakeLengthTest(unittest.TestCase):
+    def msgs(self, n_asked, answer="mild cough"):
+        from models import Message
+        out = []
+        for i in range(n_asked):
+            out += [Message(role="assistant", text=f"q{i}"), Message(role="patient", text=answer)]
+        return out
+
+    def test_short_interview(self):
+        import ai
+        from models import Patient
+        self.assertEqual(ai.MAX_QUESTIONS, 4)
+        asked = [ai.next_question(Patient(), self.msgs(n))[0] for n in range(5)]
+        self.assertEqual(asked[:4], ai.FALLBACK_QUESTIONS)
+        self.assertEqual(asked[4], ai.DONE_MESSAGE)
+
+    def test_urgent_interview_is_shorter(self):
+        import ai
+        from models import Patient
+        self.assertNotEqual(ai.next_question(Patient(), self.msgs(1), urgent=True)[0], ai.DONE_MESSAGE)
+        self.assertEqual(ai.next_question(Patient(), self.msgs(2), urgent=True)[0], ai.DONE_MESSAGE)

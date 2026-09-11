@@ -143,8 +143,8 @@ def patient_documents(patient: dict = Depends(patient_by_code)):
 
 @app.post("/intake/next-question")
 def next_question(body: NextQuestionIn):
-    question, source = ai.next_question(body.patient, body.messages, body.language)
     result, _, _ = run_safety(body.patient, body.messages)
+    question, source = ai.next_question(body.patient, body.messages, body.language, urgent=result.level == "RED")
     return {
         "question": question,
         "done": question == ai.DONE_MESSAGE,
