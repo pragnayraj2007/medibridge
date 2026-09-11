@@ -32,16 +32,14 @@ export type CaseResponse = {
   guidance: string
 }
 
-// In development the phone reaches the PC at the same address as the Expo dev
-// server, so default to that host on port 8000. Override with EXPO_PUBLIC_API_URL.
-function defaultApiUrl() {
-  const host = Constants.expoConfig?.hostUri?.split(':')[0]
-  return host ? `http://${host}:8000` : 'http://localhost:8000'
-}
-
-export const API_URL = process.env.EXPO_PUBLIC_API_URL || defaultApiUrl()
+// Backend URL, in priority order:
+//   1. EXPO_PUBLIC_API_URL — build-time override (web export uses "/api";
+//      a local backend uses http://<PC-IP>:8000)
+//   2. extra.apiUrl from app.config.js — the deployed backend
+export const API_URL = (process.env.EXPO_PUBLIC_API_URL || Constants.expoConfig?.extra?.apiUrl || '').replace(/\/+$/, '')
 
 async function post<T>(path: string, body: unknown): Promise<T> {
+  if (!API_URL) throw new Error('No API URL configured')
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 45000)
   try {
@@ -65,4 +63,4 @@ export const api = {
     post<CaseResponse>('/cases', body),
 }
 
-export const SERVER_ERROR = `Can't reach the MediBridge server at ${API_URL}. Make sure it is running and your phone is on the same Wi-Fi as the computer.`
+export const SERVER_ERROR = `Can't reach the MediBridge server. Check your internet connection and try again. (${API_URL || 'no server configured'})`

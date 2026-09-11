@@ -1,14 +1,22 @@
-MediBridge Patient App (Expo) - first-time setup (Windows PowerShell)
+MediBridge Patient App (Expo SDK 57) — Windows
 
-Run these one at a time, inside this folder:
+The app talks to the DEPLOYED backend by default (https://medibridge-api-rose.vercel.app,
+set in app.config.js), so a phone only needs internet — no PC backend or same Wi-Fi.
 
-1) npm install
+First-time setup (inside this folder):
+  1) npm install
+  2) npx expo start -c        -> scan the QR code with Expo Go (Android)
 
-2) npx expo install expo-router react-native react react-dom react-native-web @expo/metro-runtime expo-status-bar expo-linking expo-constants react-native-safe-area-context react-native-screens @expo/vector-icons expo-linear-gradient
+Use a LOCAL backend instead (PC running uvicorn on port 8000, phone on the same Wi-Fi):
+  PowerShell:  $env:EXPO_PUBLIC_API_URL="http://<your-PC-IP>:8000"; npx expo start -c
 
-3) npx expo install typescript @types/react -- --save-dev
+Checks:
+  check-android.bat   -> dependency versions, resolved config, Android bundle build
 
-4) npx expo start -c
+Installable Android APK (no Play Store) — needs a free Expo account:
+  npx eas-cli@latest login
+  npx eas-cli@latest build -p android --profile preview
+  -> open the download link/QR on the phone and install the APK
+  (first run asks to create the EAS project; accept. Config is in eas.json.)
 
-Then scan the QR code with Expo Go (Android) or the Camera app (iPhone).
-If npm complains about peer dependencies (ERESOLVE), add  -- --legacy-peer-deps  to the end of step 2.
+Web version (served at https://medibridge-xi.vercel.app/patient): export-web.bat

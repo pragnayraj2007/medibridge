@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '800', color: C.textDark, textAlign: 'center', marginBottom: 8 },
   subtitle: { fontSize: 14, color: C.textGray, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
   points: { gap: 12, marginBottom: 24 },
-  pointCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, backgroundColor: C.white, borderRadius: 16, padding: 16, ...S.card },
+  pointCard: { ...S.card, flexDirection: 'row', alignItems: 'flex-start', gap: 14, borderRadius: 16, padding: 16 },
   pointIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: C.primaryBg, alignItems: 'center', justifyContent: 'center' },
   pointText: { flex: 1 },
   pointTitle: { fontSize: 14, fontWeight: '700', color: C.textDark, marginBottom: 4 },

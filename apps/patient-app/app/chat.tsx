@@ -18,6 +18,7 @@ export default function Chat() {
   const [error, setError] = useState(false)
   const [done, setDone] = useState(false)
   const [urgent, setUrgent] = useState<string | null>(null)
+  const [micHint, setMicHint] = useState(false)
   const scroll = useRef<ScrollView>(null)
 
   const ask = async (history: Message[]) => {
@@ -45,7 +46,7 @@ export default function Chat() {
     if (!t || loading) return
     setInput('')
     const history: Message[] = [...messages, { role: 'patient', text: t }]
-    update({ messages: history })
+    update({ messages: history, result: null }) // answers changed: any earlier submission is stale
     ask(history)
   }
 
@@ -124,7 +125,7 @@ export default function Chat() {
 
             {/* Input */}
             <View style={styles.inputRow}>
-              <TouchableOpacity style={styles.micBtn}>
+              <TouchableOpacity style={styles.micBtn} onPress={() => setMicHint(h => !h)}>
                 <Ionicons name="mic-outline" size={22} color={C.primary} />
               </TouchableOpacity>
               <TextInput
@@ -141,6 +142,7 @@ export default function Chat() {
                 <Ionicons name="send" size={18} color={C.white} />
               </TouchableOpacity>
             </View>
+            {micHint && <Text style={styles.micHint}>Voice input is coming soon. Please type your answer for now.</Text>}
           </>
         )}
 
@@ -193,6 +195,7 @@ const styles = StyleSheet.create({
   micBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.primaryBg, alignItems: 'center', justifyContent: 'center' },
   input: { flex: 1, backgroundColor: C.white, borderRadius: 24, borderWidth: 1.5, borderColor: C.border, paddingHorizontal: 16, paddingVertical: 11, fontSize: 14, color: C.textDark },
   sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
+  micHint: { color: C.textGray, fontSize: 12, textAlign: 'center', paddingHorizontal: 16, paddingBottom: 6 },
   doneCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
   doneCtaText: { color: C.primary, fontSize: 13, fontWeight: '600' },
 })

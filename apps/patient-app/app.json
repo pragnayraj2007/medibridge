@@ -7,9 +7,12 @@
     "scheme": "medibridge",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.medibridge.patient"
     },
     "android": {
+      "package": "com.medibridge.patient",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#EEF5FF"
       }

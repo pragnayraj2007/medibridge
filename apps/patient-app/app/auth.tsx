@@ -36,6 +36,7 @@ export default function Auth() {
         sex,
         pregnant: canBePregnant ? pregnant : null,
       },
+      result: null, // details changed: any earlier submission is stale
     })
     router.push('/consent')
   }

@@ -4,9 +4,16 @@ import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { C, S } from '../constants/theme'
+import { useIntake } from '../lib/intake'
 
 export default function Welcome() {
   const router = useRouter()
+  const { reset } = useIntake()
+  // Always start a clean intake, even if a previous demo run was abandoned midway
+  const start = () => {
+    reset()
+    router.push('/language')
+  }
   return (
     <SafeAreaView style={S.screen}>
       <View style={styles.container}>
@@ -36,12 +43,12 @@ export default function Welcome() {
         </Text>
 
         {/* Buttons */}
-        <TouchableOpacity style={[S.btn, styles.btnPrimary]} onPress={() => router.push('/language')}>
+        <TouchableOpacity style={[S.btn, styles.btnPrimary]} onPress={start}>
           <Text style={S.btnText}>Get Started</Text>
           <Ionicons name="arrow-forward" size={18} color={C.white} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.btnSecondary}>
+        <TouchableOpacity style={styles.btnSecondary} onPress={start}>
           <Ionicons name="mic-outline" size={18} color={C.primary} />
           <Text style={styles.btnSecondaryText}>Talk to us</Text>
         </TouchableOpacity>

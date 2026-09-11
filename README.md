@@ -4,7 +4,16 @@ AI-assisted clinical intake and triage platform. Reduces the gap between patient
 
 ---
 
-**Live demo:** https://medibridge-xi.vercel.app — patient app at `/patient`, doctor dashboard at `/doctor`.
+## Demo
+
+| Client | Where |
+|---|---|
+| Patient (primary) | Expo app on an Android phone — Expo Go or the APK from `eas build` (see below) |
+| Patient (fallback) | https://medibridge-xi.vercel.app/patient |
+| Doctor | https://medibridge-xi.vercel.app/doctor (desktop browser) |
+| Backend API | https://medibridge-api-rose.vercel.app (`/health`, `/docs`) |
+
+Check the whole path (phone-style API calls → Supabase → doctor site) with `smoke-test.bat`.
 
 ---
 
@@ -15,10 +24,8 @@ Patient App ──┐
               ├──→ Backend (Vercel) ──→ Supabase
 Doctor Web ───┘         │
                         ├──→ Groq (clinical agent)
-                        ├──→ Gemini (multimodal)
-                        ├──→ PaddleOCR
-                        ├──→ Sarvam STT/TTS
-                        └──→ WHO Safety Engine (deterministic)
+                        ├──→ WHO Safety Engine (deterministic)
+                        └──→ planned: Gemini, PaddleOCR, Sarvam STT/TTS
 ```
 
 Triage flow: `Patient input → AI extraction → Safety Engine → RED/YELLOW/GREEN → Doctor`
@@ -31,15 +38,15 @@ The LLM never makes the final triage decision. The deterministic Safety Engine d
 
 | Layer | Technology |
 |---|---|
-| Patient Frontend | React Native (Expo) → Expo Go + web on Vercel |
+| Patient Frontend | React Native (Expo SDK 57) → Android (Expo Go / APK) + web fallback on Vercel |
 | Doctor Frontend | Next.js → Vercel |
 | Backend/API | FastAPI → Vercel (Python) |
 | Database | Supabase |
 | Clinical Agent | Groq `openai/gpt-oss-120b` |
-| Multimodal | Gemini |
-| OCR | PaddleOCR |
-| STT | Sarvam Saaras v4 |
-| TTS | Sarvam Bulbul v3 |
+| Multimodal | Gemini (planned) |
+| OCR | PaddleOCR (planned) |
+| STT | Sarvam Saaras v4 (planned) |
+| TTS | Sarvam Bulbul v3 (planned) |
 | Triage | Deterministic WHO-based Safety Engine |
 
 ---
@@ -73,9 +80,19 @@ medibridge/
 - Node.js 18+
 - Python 3.11+
 
-### Patient App
+### Patient App (Android)
 
-See `apps/patient-app/SETUP.txt`, then `npx expo start` and scan the QR code with Expo Go.
+```bash
+cd apps/patient-app
+npm install
+npx expo start -c          # scan the QR code with Expo Go on the phone
+```
+
+The app uses the deployed backend by default (`extra.apiUrl` in `app.config.js`), so the phone only needs internet.
+For a local backend: `EXPO_PUBLIC_API_URL=http://<PC-IP>:8000 npx expo start -c`.
+
+Installable APK (no Play Store, free Expo account): `npx eas-cli@latest build -p android --profile preview` (profiles in `eas.json`, package `com.medibridge.patient`).
+`check-android.bat` checks dependency versions, the resolved config and the Android bundle.
 
 ### Doctor Dashboard
 
@@ -139,29 +156,26 @@ The Vercel backend needs Supabase — serverless instances don't share memory.
 
 ## Environment Variables
 
-See `.env.example` at the repo root and `apps/backend/.env.example`.
+| Where | Variable | Purpose |
+|---|---|---|
+| Vercel `medibridge-api` | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | Supabase project + secret key (server only) |
+| Vercel `medibridge-api` | `GROQ_API_KEY` (`GROQ_MODEL` optional) | AI questions/extraction; without it the app uses scripted questions |
+| Vercel `medibridge` | `BACKEND_URL` | Where the site proxies `/api/*` (build time) |
+| Patient app | `EXPO_PUBLIC_API_URL` (optional) | Override the backend URL (web export uses `/api`) |
 
-Never commit `.env` files.
+Secrets live only in Vercel and in `apps/backend/local-secrets.txt` (git-ignored; template: `local-secrets.example.txt`). `set-api-env.bat` copies that file into Vercel and redeploys the backend. Never commit `.env` or secrets; the frontends never see them.
 
 ---
 
 ## Git Branches
 
-```
-main
-├── feature/patient-app
-├── feature/doctor-dashboard
-├── feature/backend
-├── feature/ai
-├── feature/safety-engine
-└── feature/mvp-integration
-```
+Work on a `feature/<topic>` branch and open a pull request into `main` (current: `feature/demo-readiness`).
 
 ---
 
 ## Demo Flow
 
-1. Patient opens app → enters symptoms via text/voice
+1. Patient opens the Android app → answers the AI's questions (text; voice planned)
 2. AI extracts structured clinical data
 3. WHO Safety Engine classifies: RED / YELLOW / GREEN
 4. Patient sees clear guidance

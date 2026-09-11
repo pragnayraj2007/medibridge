@@ -18,19 +18,24 @@ const STEPS = [
 
 export default function Processing() {
   const router = useRouter()
-  const { patient, language, messages, documents, update } = useIntake()
+  const { patient, language, messages, documents, result, update } = useIntake()
   const [step, setStep] = useState(0)
   const [status, setStatus] = useState<'working' | 'done' | 'error' | 'empty'>('working')
 
   const submit = async () => {
+    if (result) {
+      // Already submitted and nothing changed since (going back and forward again)
+      setStatus('done')
+      return
+    }
     if (!messages.some(m => m.role === 'patient')) {
       setStatus('empty')
       return
     }
     setStatus('working')
     try {
-      const result = await api.submitCase({ patient, language, messages, documents })
-      update({ result })
+      const created = await api.submitCase({ patient, language, messages, documents })
+      update({ result: created })
       setStatus('done')
     } catch {
       setStatus('error')

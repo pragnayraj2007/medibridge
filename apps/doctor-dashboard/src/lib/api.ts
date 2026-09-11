@@ -45,10 +45,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json()
 }
 
-export const getCases = () => request<Case[]>('/cases')
-export const getCase = (id: string) => request<Case>(`/cases/${id}`)
+export const getCases = () => request<Case[]>('/cases').then(cs => cs.map(normalizeCase))
+export const getCase = (id: string) => request<Case>(`/cases/${id}`).then(normalizeCase)
 export const setStatus = (id: string, status: Status) =>
-  request<Case>(`/cases/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) })
+  request<Case>(`/cases/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }).then(normalizeCase)
 
 export const LEVEL_RANK: Record<Level, number> = { RED: 0, YELLOW: 1, GREEN: 2 }
 
@@ -67,6 +67,25 @@ export function patientName(c: Case) {
 }
 
 export function complaint(c: Case) {
-  if (c.extraction.symptoms.length) return c.extraction.symptoms.join(', ')
-  return c.messages.find(m => m.role === 'patient')?.text ?? '—'
+  const symptoms = c.extraction?.symptoms ?? []
+  if (symptoms.length) return symptoms.join(', ')
+  return (c.messages ?? []).find(m => m.role === 'patient')?.text ?? '—'
+}
+
+// Older or hand-edited rows may miss fields; fill defaults so pages never crash.
+const EMPTY_EXTRACTION: Case['extraction'] = {
+  source: 'rules', model: null, symptoms: [], duration: null, severity: null, history: [],
+  medications: [], allergies: [], llm_flags: [], keyword_flags: [],
+}
+
+export function normalizeCase(c: Case): Case {
+  const emptyTriage: Case['triage'] = { level: c.triage_level, reasons: [], engine_version: '—' }
+  return {
+    ...c,
+    patient: c.patient ?? {},
+    messages: c.messages ?? [],
+    documents: c.documents ?? [],
+    extraction: { ...EMPTY_EXTRACTION, ...(c.extraction ?? {}) },
+    triage: { ...emptyTriage, ...(c.triage ?? {}) },
+  }
 }
