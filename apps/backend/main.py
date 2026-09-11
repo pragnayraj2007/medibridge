@@ -155,7 +155,7 @@ def next_question(body: NextQuestionIn, patient: Optional[dict] = Depends(option
     result, _, _ = run_safety(body.patient, body.messages)
     question, source, meta = intake_agent.next_question(
         body.patient, body.messages, body.language, urgent=result.level == "RED",
-        brief=intake_agent.cached_brief(store, patient), safety_labels=[r.label for r in result.reasons])
+        brief=lambda: intake_agent.cached_brief(store, patient), safety_labels=[r.label for r in result.reasons])
     if meta.get("thinking"):
         logging.getLogger("medibridge.intake").info("agent reasoning: %s", meta["thinking"])
     return {

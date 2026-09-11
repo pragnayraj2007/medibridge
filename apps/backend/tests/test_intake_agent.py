@@ -87,3 +87,16 @@ class AgentTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@mock.patch.dict(os.environ, {"GROQ_API_KEY": "k"})
+class LateFailureTest(unittest.TestCase):
+    def test_finish_instead_of_switching_to_scripted_questions(self):
+        with mock.patch.object(ai, "_chat", return_value="not json"):
+            q, _, _ = intake_agent.next_question(Patient(), convo(("q1", "a1"), ("q2", "a2")), "hi")
+        self.assertEqual(q, ai.DONE_MESSAGE)
+
+    def test_brief_is_lazy(self):
+        loader = mock.Mock(return_value="records")
+        intake_agent.next_question(Patient(), convo(*[("q", "a")] * 4), brief=loader)  # at the limit: no AI, no load
+        loader.assert_not_called()

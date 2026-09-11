@@ -103,7 +103,7 @@ class MemoryStore:
         return dict(row)
 
     def select(self, table: str, filters: Optional[dict] = None, order: str | None = None,
-               desc: bool = False, limit: int | None = None) -> list[dict]:
+               desc: bool = False, limit: int | None = None, columns: str = "*") -> list[dict]:
         rows = [dict(r) for r in self._t[table].values() if _match(r, filters or {})]
         if order:
             rows.sort(key=lambda r: _cmp(r.get(order) or "", r.get(order) or "")[0], reverse=desc)
@@ -174,8 +174,8 @@ class SupabaseStore:
         return self._send("POST", table, json=row)[0]
 
     def select(self, table: str, filters: Optional[dict] = None, order: str | None = None,
-               desc: bool = False, limit: int | None = None) -> list[dict]:
-        params = {"select": "*", **self._params(filters)}
+               desc: bool = False, limit: int | None = None, columns: str = "*") -> list[dict]:
+        params = {"select": columns, **self._params(filters)}
         if order:
             params["order"] = f"{order}.{'desc' if desc else 'asc'}"
         if limit:

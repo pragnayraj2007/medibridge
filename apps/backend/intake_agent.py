@@ -35,6 +35,7 @@ Think privately first, then ask ONE short question in {language}.
 
 Rules
 - At most {limit} questions in total; {asked} already asked, so {left} left. Every question must earn its place: combine related items (for example when it started and how bad it is from 1 to 10).
+- Keep each question short and easy: under 25 words, at most 3 examples, no long lists.
 - In "thinking", briefly consider what could be serious given everything known, then choose the single most useful next question. Prefer questions about warning signs from the checklist that fit the complaint.
 - Use the patient's records: never ask for something the records or conversation already answer. You may briefly confirm a recorded fact inside another question (for example "Your report lists metformin - are you still taking it, and any other medicines?").
 - Adapt to the person: if the last answer was vague, "I don't know", confused or off-topic, rephrase simply and give one plain example. If they seem worried or in pain, start with a few kind words. Use short, everyday words.
@@ -97,9 +98,10 @@ def cached_brief(store, patient: dict | None) -> str:
     if hit and hit[0] > time.time():
         return hit[1]
     try:
-        cases = store.select("cases", {"patient_id": ("eq", patient["id"])}, order="created_at", desc=True, limit=3)
+        cases = store.select("cases", {"patient_id": ("eq", patient["id"])}, order="created_at", desc=True, limit=3,
+                             columns="created_at,triage_level,extraction")
         docs = store.select("documents", {"patient_id": ("eq", patient["id"]), "status": ("in", ["processed", "partial"])},
-                            order="created_at", desc=True, limit=3)
+                            order="created_at", desc=True, limit=3, columns="doc_type,analysis,created_at")
     except Exception as e:  # records are a bonus; the interview works without them
         log.warning("Could not load patient records for intake: %s", e)
         cases, docs = [], []
@@ -114,8 +116,9 @@ def _parse(text: str) -> dict:
 
 
 def next_question(patient, messages, language: str = "en", urgent: bool = False,
-                  brief: str = "", safety_labels: list[str] = ()) -> tuple[str, str, dict]:
+                  brief="", safety_labels: list[str] = ()) -> tuple[str, str, dict]:
     """Returns (question, source, meta). question == ai.DONE_MESSAGE when the intake is complete.
+    brief: the records summary, or a function returning it (only called when the AI is used).
     meta holds the private reasoning and known facts (for logs; never sent to the patient)."""
     asked = sum(1 for m in messages if m.role == "assistant")
     limit = min(ai.MAX_QUESTIONS, ai.URGENT_MAX_QUESTIONS) if urgent else ai.MAX_QUESTIONS
@@ -123,6 +126,8 @@ def next_question(patient, messages, language: str = "en", urgent: bool = False,
         return ai.DONE_MESSAGE, "rules", {}
     if ai.ai_enabled():
         try:
+            if callable(brief):
+                brief = brief()
             lang = ai.LANGUAGES.get(language, "English")
             system = AGENT_PROMPT.format(language=lang, limit=limit, asked=asked, left=limit - asked, checklist=CHECKLIST)
             user = (f"Patient: {ai._patient_line(patient)}\n"
@@ -138,8 +143,13 @@ def next_question(patient, messages, language: str = "en", urgent: bool = False,
                 return ai.DONE_MESSAGE, "groq", meta
             if question and not question.upper().startswith("DONE"):
                 return question[:500], "groq", meta
+            log.warning("Intake agent returned no question (done=%s)", data.get("done"))
         except Exception as e:  # network, quota, invalid JSON
             log.warning("Intake agent failed, using fallback: %s", type(e).__name__)
+        # The AI was working but gave nothing usable: after two answers, finish rather than
+        # switch to a scripted English question in the middle of the conversation.
+        if asked >= 2:
+            return ai.DONE_MESSAGE, "rules", {}
     if asked < len(ai.FALLBACK_QUESTIONS):
         return ai.FALLBACK_QUESTIONS[asked], "rules", {}
     return ai.DONE_MESSAGE, "rules", {}
