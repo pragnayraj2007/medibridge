@@ -5,7 +5,7 @@ import {
 } from 'expo-audio'
 import { useCallback, useRef, useState } from 'react'
 import { Platform } from 'react-native'
-import { api, errorText, fileFormData, Session } from './api'
+import { api, errorText, fileFormData, readBase64, Session } from './api'
 
 export const MAX_RECORDING_MS = 30000
 
@@ -44,13 +44,22 @@ export function useVoiceInput(session: Session | null, language: string) {
       const uri = recorder.uri
       if (!uri) throw new Error('Nothing was recorded. Please try again or type your answer.')
       if (!session) throw new Error('Voice needs a registered patient. Please type your answer.')
-      const web = Platform.OS === 'web'
-      const form = await fileFormData(
-        { uri, name: web ? 'voice.webm' : 'voice.m4a', type: web ? 'audio/webm' : 'audio/mp4' },
-        { language },
-      )
+      if (Platform.OS === 'web') {
+        const form = await fileFormData({ uri, name: 'voice.webm', type: 'audio/webm' }, { language })
+        try {
+          return (await api.transcribe(session, form)).transcript
+        } catch (e) {
+          throw new Error(errorText(e))
+        }
+      }
+      let audio: string
       try {
-        const res = await api.transcribe(session, form)
+        audio = await readBase64(uri)
+      } catch {
+        throw new Error('Could not read the recording. Please try again or type your answer.')
+      }
+      try {
+        const res = await api.transcribeJson(session, { audio_base64: audio, filename: 'voice.m4a', mime: 'audio/mp4', language })
         return res.transcript
       } catch (e) {
         throw new Error(errorText(e))

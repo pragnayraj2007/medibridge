@@ -90,6 +90,22 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(case["documents"][0]["id"], doc["id"])
         self.assertEqual(len(self.c.get(f"/patients/{self.code}/documents", headers=self.P).json()), 1)
 
+    def test_base64_json_uploads(self):
+        import base64
+        b64 = lambda b: base64.b64encode(b).decode()
+        r = self.c.post("/voice/transcribe-json", json={"audio_base64": b64(b"abc"), "language": "te"})
+        self.assertEqual(r.status_code, 401)  # needs the patient token
+        r = self.c.post("/voice/transcribe-json", headers=self.P, json={"audio_base64": b64(b"abc"), "mime": "audio/mp4", "language": "te"})
+        self.assertEqual(r.status_code, 503)  # no Sarvam key in tests: same message as multipart
+        r = self.c.post("/voice/transcribe-json", headers=self.P, json={"audio_base64": "not base64!!"})
+        self.assertEqual(r.status_code, 400)
+        r = self.c.post("/documents/json", headers=self.P, json={"file_base64": b64(b"GIF89a"), "filename": "x.gif", "mime": "image/gif"})
+        self.assertEqual(r.status_code, 415)
+        r = self.c.post("/documents/json", headers=self.P, json={"file_base64": "data:image/png;base64," + b64(PNG),
+                                                                 "filename": "lab.png", "mime": "image/png", "doc_type": "Lab Report"})
+        self.assertEqual(r.status_code, 201, r.text)
+        self.assertEqual(r.json()["name"], "lab.png")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -156,6 +156,19 @@ export async function fileFormData(file: { uri: string; name: string; type: stri
   return form
 }
 
+/** Reads a local file (recording or picked document) as base64. Native only. */
+export async function readBase64(uri: string): Promise<string> {
+  const fileUri = uri.startsWith('/') ? `file://${uri}` : uri
+  try {
+    // Loaded lazily so the web bundle never touches the native file system module
+    const { File } = require('expo-file-system') as typeof import('expo-file-system')
+    const data = await (new File(fileUri) as unknown as { base64: () => Promise<string> }).base64()
+    if (data) return data
+  } catch {}
+  const legacy = require('expo-file-system/legacy') as { readAsStringAsync: (u: string, o: { encoding: 'base64' }) => Promise<string> }
+  return legacy.readAsStringAsync(fileUri, { encoding: 'base64' })
+}
+
 export const api = {
   registerPatient: (body: { name: string; phone: string | null; age: number; sex: Sex | null; pregnancy_status: PregnancyStatus; language: string }) =>
     request<{ patient: PatientProfile; token: string }>('/patients', { method: 'POST', body }),
@@ -177,9 +190,14 @@ export const api = {
 
   uploadDocument: (s: Session, form: FormData) =>
     request<UploadedDocument>('/documents', { method: 'POST', form, session: s, timeoutMs: 90000 }),
+  // Android: multipart uploads are unreliable in Expo Go, so native sends base64 JSON instead
+  uploadDocumentJson: (s: Session, body: { file_base64: string; filename: string; mime: string | null; doc_type: string | null }) =>
+    request<UploadedDocument>('/documents/json', { method: 'POST', body, session: s, timeoutMs: 90000 }),
   warmOcr: (s: Session) => request<{ ocr: string }>('/documents/warmup', { method: 'POST', session: s, timeoutMs: 8000 }),
   transcribe: (s: Session, form: FormData) =>
     request<{ transcript: string; language_code: string | null }>('/voice/transcribe', { method: 'POST', form, session: s, timeoutMs: 45000 }),
+  transcribeJson: (s: Session, body: { audio_base64: string; filename: string; mime: string; language: string }) =>
+    request<{ transcript: string; language_code: string | null }>('/voice/transcribe-json', { method: 'POST', body, session: s, timeoutMs: 45000 }),
   speak: (s: Session, text: string, language: string) =>
     request<{ audio_base64: string; mime: string }>('/voice/speak', { method: 'POST', body: { text, language }, session: s, timeoutMs: 30000 }),
 }

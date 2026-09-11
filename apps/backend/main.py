@@ -1,3 +1,5 @@
+import base64
+import binascii
 import logging
 import os
 from typing import Literal, Optional
@@ -16,8 +18,8 @@ import service  # noqa: E402
 import voice  # noqa: E402
 from auth import issue_token, patient_token_matches, verify_password, verify_token  # noqa: E402
 from models import (  # noqa: E402
-    AppointmentRequest, AppointmentStatusUpdate, AvailabilityUpdate, CaseCreate, DemoReset, LoginIn,
-    NextQuestionIn, PatientRegister, PatientUpdate, SpeakIn, StatusUpdate,
+    AppointmentRequest, AppointmentStatusUpdate, AudioIn, AvailabilityUpdate, CaseCreate, DemoReset, DocumentIn,
+    LoginIn, NextQuestionIn, PatientRegister, PatientUpdate, SpeakIn, StatusUpdate,
 )
 from service import GUIDANCE, run_safety  # noqa: E402
 from storage import StorageError, get_store  # noqa: E402
@@ -177,6 +179,28 @@ async def transcribe(file: UploadFile = File(...), language: str = Form("en"), p
         raise HTTPException(e.status, str(e))
 
 
+def _decode_b64(value: str) -> bytes:
+    if "," in value[:100] and value.startswith("data:"):
+        value = value.split(",", 1)[1]  # tolerate a data: URI prefix
+    try:
+        data = base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(400, "The file could not be read. Please try again.")
+    if not data:
+        raise HTTPException(400, "The file is empty.")
+    return data
+
+
+@app.post("/voice/transcribe-json")
+def transcribe_json(body: AudioIn, patient: dict = Depends(current_patient)):
+    """Same as /voice/transcribe, but the audio arrives as base64 JSON (reliable on Android)."""
+    data = _decode_b64(body.audio_base64)
+    try:
+        return voice.transcribe(data, body.filename or "voice.m4a", body.mime, body.language)
+    except voice.VoiceError as e:
+        raise HTTPException(e.status, str(e))
+
+
 @app.post("/voice/speak")
 def speak(body: SpeakIn, patient: dict = Depends(current_patient)):
     try:
@@ -191,6 +215,16 @@ async def upload_document(file: UploadFile = File(...), doc_type: Optional[str] 
     data = await file.read()
     try:
         return service.upload_document(store, patient, data, file.filename or "document", file.content_type, doc_type)
+    except docs_pipeline.DocumentError as e:
+        raise HTTPException(e.status, str(e))
+
+
+@app.post("/documents/json", status_code=201)
+def upload_document_json(body: DocumentIn, patient: dict = Depends(current_patient)):
+    """Same as POST /documents, but the file arrives as base64 JSON (reliable on Android)."""
+    data = _decode_b64(body.file_base64)
+    try:
+        return service.upload_document(store, patient, data, body.filename or "document", body.mime, body.doc_type)
     except docs_pipeline.DocumentError as e:
         raise HTTPException(e.status, str(e))
 

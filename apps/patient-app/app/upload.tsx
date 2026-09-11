@@ -1,14 +1,14 @@
 // Consultation step 4: documents. Each file goes to the backend: upload -> OCR (PaddleOCR)
 // -> multimodal analysis (Gemini). The patient sees the real status of every stage and can
 // always continue; a failed document never blocks the consultation.
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Platform } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import * as DocumentPicker from 'expo-document-picker'
 import { useEffect, useState } from 'react'
 import { C, S } from '../constants/theme'
-import { api, errorText, fileFormData, UploadedDocument } from '../lib/api'
+import { api, errorText, fileFormData, readBase64, UploadedDocument } from '../lib/api'
 import { useIntake } from '../lib/intake'
 import { useSession } from '../lib/session'
 
@@ -18,7 +18,10 @@ const DOC_TYPES = [
   { icon: 'scan-outline', label: 'X-Ray / Scan', color: '#8E24AA' },
   { icon: 'medical-outline', label: 'Other', color: '#F57C00' },
 ]
-const MAX_BYTES = 4 * 1024 * 1024
+// Phones send the file as base64 (a third larger), so keep them under the 4.5 MB request limit
+const MAX_BYTES = Platform.OS === 'web' ? 4 * 1024 * 1024 : 3 * 1024 * 1024
+const MAX_LABEL = Platform.OS === 'web' ? '4 MB' : '3 MB'
+class FileProblem extends Error {}
 const STAGES = ['Uploading', 'Reading text (OCR)', 'Multimodal analysis', 'Saving to your case']
 const STAGE_STATUS: Record<string, string> = { done: 'done', empty: 'no text found', not_configured: 'not available', failed: 'failed' }
 
@@ -44,18 +47,30 @@ export default function Upload() {
     const res = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true, multiple: false })
     if (res.canceled || !res.assets?.length) return
     const f = res.assets[0]
-    if (f.size && f.size > MAX_BYTES) return setError('That file is larger than 4 MB. Please choose a smaller file or photo.')
+    if (f.size && f.size > MAX_BYTES) return setError(`That file is larger than ${MAX_LABEL}. Please choose a smaller file or photo.`)
     if (!session) return setError('Please register first.')
     setBusy(true)
     try {
-      const form = await fileFormData(
-        { uri: f.uri, name: f.name || 'document', type: f.mimeType || 'application/octet-stream', webFile: (f as { file?: Blob }).file ?? null },
-        { doc_type: docType },
-      )
-      const doc = await api.uploadDocument(session, form)
+      let doc: UploadedDocument
+      if (Platform.OS === 'web') {
+        const form = await fileFormData(
+          { uri: f.uri, name: f.name || 'document', type: f.mimeType || 'application/octet-stream', webFile: (f as { file?: Blob }).file ?? null },
+          { doc_type: docType },
+        )
+        doc = await api.uploadDocument(session, form)
+      } else {
+        let data: string
+        try {
+          data = await readBase64(f.uri)
+        } catch {
+          throw new FileProblem('Could not read that file. Please choose it again.')
+        }
+        if (data.length > MAX_BYTES * 1.37) throw new FileProblem(`That file is larger than ${MAX_LABEL}. Please choose a smaller file or photo.`)
+        doc = await api.uploadDocumentJson(session, { file_base64: data, filename: f.name || 'document', mime: f.mimeType || null, doc_type: docType })
+      }
       update(s => ({ documents: [...s.documents, doc], result: null }))
     } catch (e) {
-      setError(errorText(e))
+      setError(e instanceof FileProblem ? e.message : errorText(e))
     } finally {
       setBusy(false)
     }
@@ -98,7 +113,7 @@ export default function Upload() {
             <>
               <Ionicons name="cloud-upload-outline" size={32} color={C.primary} />
               <Text style={styles.dropTitle}>Tap to choose a file or photo</Text>
-              <Text style={styles.dropSub}>PDF, JPG, PNG, WEBP · up to 4 MB</Text>
+              <Text style={styles.dropSub}>PDF, JPG, PNG, WEBP · up to {MAX_LABEL}</Text>
             </>
           )}
         </TouchableOpacity>

@@ -102,6 +102,22 @@ class DemoReset(BaseModel):
     cancel_upcoming: bool = False
 
 
+class AudioIn(BaseModel):
+    """Voice upload as base64 JSON (Android-safe; multipart stays for the web)."""
+    audio_base64: str = Field(min_length=4, max_length=6_000_000)
+    filename: str = Field("voice.m4a", max_length=120)
+    mime: Optional[str] = Field(None, max_length=80)
+    language: str = Field("en", max_length=10)
+
+
+class DocumentIn(BaseModel):
+    """Document upload as base64 JSON (Android-safe; multipart stays for the web)."""
+    file_base64: str = Field(min_length=4, max_length=6_000_000)
+    filename: str = Field("document", max_length=200)
+    mime: Optional[str] = Field(None, max_length=80)
+    doc_type: Optional[str] = Field(None, max_length=60)
+
+
 class SpeakIn(BaseModel):
     text: str = Field(min_length=1, max_length=1500)
     language: str = Field("en", max_length=10)
