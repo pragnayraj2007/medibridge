@@ -1,83 +1,172 @@
-"""Case storage: Supabase (via its REST API) when configured, otherwise in memory.
+"""Storage: Supabase (PostgREST) when configured, otherwise in memory.
 
-In-memory mode is for local development only — data is lost on restart.
-Create the Supabase table with supabase/schema.sql.
+A small table-level interface shared by both backends:
+  insert(table, row) -> row
+  select(table, filters, order=None, desc=False, limit=None) -> [rows]
+  update(table, id, fields) -> row | None
+filters: {column: (op, value)} with op in eq, neq, in, gte, lte, is_null.
+
+In-memory mode is for local development and tests only (data is lost on
+restart); it seeds the demo doctors and enforces the same unique rules as the
+database. Create the Supabase tables with supabase/schema.sql and
+supabase/migrations/*.sql.
 """
 from __future__ import annotations
 
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
+
+TABLES = ("patients", "doctors", "cases", "appointments", "documents")
+
+
+class Conflict(Exception):
+    """A unique constraint rejected the write (e.g. a slot was just taken)."""
+
+
+class StorageError(Exception):
+    """The database could not be reached or rejected the request."""
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _cmp(a: Any, b: Any) -> tuple[Any, Any]:
+    """Compare timestamps as datetimes, everything else as-is."""
+    if isinstance(a, str) and isinstance(b, str) and len(a) >= 19 and a[4:5] == "-" and b[4:5] == "-":
+        try:
+            pa = datetime.fromisoformat(a.replace("Z", "+00:00"))
+            pb = datetime.fromisoformat(b.replace("Z", "+00:00"))
+            return pa, pb
+        except ValueError:
+            pass
+    return a, b
+
+
+def _match(row: dict, filters: dict) -> bool:
+    for col, (op, val) in filters.items():
+        v = row.get(col)
+        if op == "eq" and v != val:
+            return False
+        if op == "neq" and v == val:
+            return False
+        if op == "in" and v not in val:
+            return False
+        if op == "is_null" and (v is None) != bool(val):
+            return False
+        if op in ("gte", "lte"):
+            if v is None:
+                return False
+            a, b = _cmp(v, val)
+            if (op == "gte" and a < b) or (op == "lte" and a > b):
+                return False
+    return True
 
 
 class MemoryStore:
     name = "memory"
 
     def __init__(self) -> None:
-        self._rows: dict[str, dict] = {}
+        from seed import doctor_rows
+        self._t: dict[str, dict[str, dict]] = {t: {} for t in TABLES}
+        now = datetime.now(timezone.utc)
+        for d in doctor_rows(now):
+            self._t["doctors"][d["id"]] = {**d, "created_at": now.isoformat(), "updated_at": now.isoformat()}
 
-    def create(self, row: dict) -> dict:
-        now = datetime.now(timezone.utc).isoformat()
-        row = {**row, "id": str(uuid.uuid4()), "created_at": now, "updated_at": now}
-        self._rows[row["id"]] = row
-        return row
+    def _check_unique(self, table: str, row: dict, ignore_id: str | None = None) -> None:
+        others = [r for r in self._t[table].values() if r["id"] != ignore_id]
+        if table == "patients" and any(r["patient_code"] == row.get("patient_code") for r in others):
+            raise Conflict("patient_code")
+        if table == "doctors" and row.get("email") and any(r.get("email") == row["email"] for r in others):
+            raise Conflict("email")
+        if table == "appointments" and row.get("status") != "cancelled" and any(
+            r["doctor_id"] == row.get("doctor_id") and r["status"] != "cancelled"
+            and _cmp(r["scheduled_at"], row.get("scheduled_at"))[0] == _cmp(r["scheduled_at"], row.get("scheduled_at"))[1]
+            for r in others
+        ):
+            raise Conflict("appointment slot")
 
-    def list(self, triage_level: Optional[str], status: Optional[str], limit: int) -> list[dict]:
-        rows = sorted(self._rows.values(), key=lambda r: r["created_at"], reverse=True)
-        rows = [r for r in rows if (not triage_level or r["triage_level"] == triage_level)
-                and (not status or r["status"] == status)]
-        return rows[:limit]
+    def insert(self, table: str, row: dict) -> dict:
+        now = _now()
+        row = {"id": str(uuid.uuid4()), "created_at": now, **row}
+        if table != "documents":
+            row.setdefault("updated_at", now)
+        self._check_unique(table, row)
+        self._t[table][row["id"]] = row
+        return dict(row)
 
-    def get(self, case_id: str) -> Optional[dict]:
-        return self._rows.get(case_id)
+    def select(self, table: str, filters: Optional[dict] = None, order: str | None = None,
+               desc: bool = False, limit: int | None = None) -> list[dict]:
+        rows = [dict(r) for r in self._t[table].values() if _match(r, filters or {})]
+        if order:
+            rows.sort(key=lambda r: _cmp(r.get(order) or "", r.get(order) or "")[0], reverse=desc)
+        return rows[:limit] if limit else rows
 
-    def update(self, case_id: str, fields: dict) -> Optional[dict]:
-        row = self._rows.get(case_id)
+    def update(self, table: str, row_id: str, fields: dict) -> Optional[dict]:
+        row = self._t[table].get(row_id)
         if row is None:
             return None
-        row.update(fields, updated_at=datetime.now(timezone.utc).isoformat())
-        return row
+        merged = {**row, **fields}
+        if table != "documents":
+            merged["updated_at"] = _now()
+        self._check_unique(table, merged, ignore_id=row_id)
+        self._t[table][row_id] = merged
+        return dict(merged)
 
 
 class SupabaseStore:
     name = "supabase"
 
     def __init__(self, url: str, key: str) -> None:
-        self._base = url.rstrip("/") + "/rest/v1/cases"
+        self._base = url.rstrip("/") + "/rest/v1/"
         headers = {"apikey": key, "Prefer": "return=representation"}
         if key.startswith("eyJ"):  # legacy service_role JWT; new sb_secret_ keys go in apikey only
             headers["Authorization"] = f"Bearer {key}"
         self._client = httpx.Client(headers=headers, timeout=15)
 
-    def create(self, row: dict) -> dict:
-        r = self._client.post(self._base, json=row)
-        r.raise_for_status()
-        return r.json()[0]
+    @staticmethod
+    def _params(filters: Optional[dict]) -> dict:
+        params: dict[str, str] = {}
+        for col, (op, val) in (filters or {}).items():
+            if op == "in":
+                params[col] = "in.(" + ",".join(f'"{v}"' for v in val) + ")"
+            elif op == "is_null":
+                params[col] = "is.null" if val else "not.is.null"
+            else:
+                params[col] = f"{op}.{val}"
+        return params
 
-    def list(self, triage_level: Optional[str], status: Optional[str], limit: int) -> list[dict]:
-        params = {"select": "*", "order": "created_at.desc", "limit": str(limit)}
-        if triage_level:
-            params["triage_level"] = f"eq.{triage_level}"
-        if status:
-            params["status"] = f"eq.{status}"
-        r = self._client.get(self._base, params=params)
-        r.raise_for_status()
-        return r.json()
+    def _send(self, method: str, table: str, **kw) -> list[dict]:
+        try:
+            r = self._client.request(method, self._base + table, **kw)
+        except httpx.HTTPError as e:
+            raise StorageError(f"database unreachable: {type(e).__name__}") from e
+        if r.status_code == 409 or (r.status_code == 400 and '"23505"' in r.text):
+            raise Conflict(r.text[:200])
+        if r.status_code >= 400:
+            raise StorageError(f"database error {r.status_code}: {r.text[:300]}")
+        return r.json() if r.content else []
 
-    def get(self, case_id: str) -> Optional[dict]:
-        r = self._client.get(self._base, params={"select": "*", "id": f"eq.{case_id}"})
-        r.raise_for_status()
-        rows = r.json()
-        return rows[0] if rows else None
+    def insert(self, table: str, row: dict) -> dict:
+        return self._send("POST", table, json=row)[0]
 
-    def update(self, case_id: str, fields: dict) -> Optional[dict]:
-        fields = {**fields, "updated_at": datetime.now(timezone.utc).isoformat()}
-        r = self._client.patch(self._base, params={"id": f"eq.{case_id}"}, json=fields)
-        r.raise_for_status()
-        rows = r.json()
+    def select(self, table: str, filters: Optional[dict] = None, order: str | None = None,
+               desc: bool = False, limit: int | None = None) -> list[dict]:
+        params = {"select": "*", **self._params(filters)}
+        if order:
+            params["order"] = f"{order}.{'desc' if desc else 'asc'}"
+        if limit:
+            params["limit"] = str(limit)
+        return self._send("GET", table, params=params)
+
+    def update(self, table: str, row_id: str, fields: dict) -> Optional[dict]:
+        if table != "documents":
+            fields = {**fields, "updated_at": _now()}
+        rows = self._send("PATCH", table, params={"id": f"eq.{row_id}"}, json=fields)
         return rows[0] if rows else None
 
 

@@ -1,6 +1,8 @@
 """Groq clinical agent: intake questions, fact extraction, doctor summary.
 
-The model only extracts and summarises. It never assigns urgency: its `flags`
+The summary is written from the fused patient context (fusion.py): profile,
+conversation, voice, documents, previous cases, vitals, and any conflicts
+between them. The model only extracts and summarises. It never assigns urgency: its `flags`
 are limited to the Safety Engine's vocabulary and go to the engine as input.
 Without GROQ_API_KEY (or if a call fails) everything falls back to rules, so
 the app keeps working.
@@ -38,7 +40,7 @@ def ai_enabled() -> bool:
     return bool(os.getenv("GROQ_API_KEY"))
 
 
-def _chat(messages: list[dict], json_mode: bool = False) -> str:
+def _chat(messages: list[dict], json_mode: bool = False, timeout: float = 20) -> str:
     body = {"model": GROQ_MODEL, "messages": messages, "temperature": 0.2}
     if json_mode:
         body["response_format"] = {"type": "json_object"}
@@ -46,7 +48,7 @@ def _chat(messages: list[dict], json_mode: bool = False) -> str:
         GROQ_URL,
         headers={"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"},
         json=body,
-        timeout=30,
+        timeout=timeout,
     )
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"] or ""
@@ -67,6 +69,8 @@ def _patient_line(p) -> str:
 
 NEXT_QUESTION_PROMPT = """You are MediBridge, a friendly intake assistant collecting information for a doctor before a clinic visit.
 Ask ONE short, simple question at a time, in {language}. Cover: main complaint, onset/duration, severity (1-10), associated symptoms, relevant history (conditions, medicines, allergies, pregnancy if relevant).
+Patients answer in their own words, typed or spoken. Spoken answers are speech-to-text transcripts and may contain recognition errors: if an answer is unclear, ask them to repeat or clarify it.
+Never offer answer options or multiple-choice lists; ask open questions.
 Never diagnose, never say how urgent it is, never give treatment advice. If the patient describes an emergency, tell them to alert staff immediately.
 When you have enough information (usually 5-7 questions), reply exactly: DONE"""
 
@@ -101,8 +105,8 @@ Return a JSON object with exactly these keys:
   "history": [conditions / past history],
   "medications": [strings],
   "allergies": [strings],
-  "flags": [keys from the list below that the patient's words clearly indicate],
-  "summary": "3-5 sentence neutral clinical summary in English for the doctor. No diagnosis. Do not state or imply urgency, red flags or their absence - the Safety Engine decides urgency."
+  "flags": [keys from the list below that the patient's words clearly indicate]
+Write every value in English, even if the conversation is in another language.
 Allowed flag keys:
 {vocab}"""
 
@@ -116,15 +120,13 @@ def _str_list(value) -> list[str]:
     return [str(x)[:200] for x in value][:30] if isinstance(value, list) else []
 
 
-def extract(patient, messages, documents) -> dict:
-    patient_text = "\n".join(m.text for m in messages if m.role == "patient")
+def extract(patient, messages, documents=()) -> dict:
     if ai_enabled():
         try:
             vocab = "\n".join(f"- {k}: {v}" for k, v in VOCABULARY.items())
-            docs = ", ".join(f"{d.name} ({d.type or 'document'})" for d in documents) or "none"
             raw = _chat([
                 {"role": "system", "content": EXTRACT_PROMPT.format(vocab=vocab)},
-                {"role": "user", "content": f"Patient: {_patient_line(patient)}\nUploaded documents: {docs}\n\n{_transcript(messages)}"},
+                {"role": "user", "content": f"Patient: {_patient_line(patient)}\n\n{_transcript(messages)}"},
             ], json_mode=True)
             data = _parse_json(raw)
             return {
@@ -137,7 +139,6 @@ def extract(patient, messages, documents) -> dict:
                 "medications": _str_list(data.get("medications")),
                 "allergies": _str_list(data.get("allergies")),
                 "llm_flags": sorted(f for f in _str_list(data.get("flags")) if f in VOCABULARY),
-                "summary": str(data.get("summary") or "")[:2000],
             }
         except Exception as e:
             log.warning("Groq extraction failed, using fallback: %s", e)
@@ -152,9 +153,50 @@ def extract(patient, messages, documents) -> dict:
         "medications": [],
         "allergies": [],
         "llm_flags": [],
-        "summary": (
-            f"Patient ({_patient_line(patient)}) reports: " + patient_text[:600]
-            + ("…" if len(patient_text) > 600 else "")
-            + " [AI summary unavailable — review the full intake.]"
-        ),
     }
+
+
+# ── Doctor summary from the fused context ──────────────────────────────────
+
+SUMMARY_PROMPT = """You write a neutral clinical intake summary for a doctor from a structured patient context (JSON).
+Rules:
+- 4-7 sentences in English. Facts only; attribute them to their source (patient, voice, document name, previous case).
+- If the context lists conflicts, state every conflicting value with its source. Never pick one side or merge them.
+- Mention relevant previous cases and document findings briefly.
+- No diagnosis, no treatment advice.
+- Do not state or imply urgency, triage level, red flags or their absence: a separate deterministic Safety Engine decides urgency and the doctor sees it separately."""
+
+
+def summarize(context: dict) -> tuple[str, str]:
+    """Returns (summary, source) where source is "groq" or "rules"."""
+    if ai_enabled():
+        try:
+            reply = _chat([
+                {"role": "system", "content": SUMMARY_PROMPT},
+                {"role": "user", "content": json.dumps(context, ensure_ascii=False, default=str)[:24000]},
+            ]).strip()
+            if reply:
+                return reply[:3000], "groq"
+        except Exception as e:
+            log.warning("Groq summary failed, using fallback: %s", e)
+    return rules_summary(context), "rules"
+
+
+def rules_summary(ctx: dict) -> str:
+    p, cur = ctx.get("patient", {}), ctx.get("current", {})
+    bits = [f"{p.get('name') or 'Patient'} ({p.get('patient_code') or 'no ID'}), age {p.get('age', 'unknown')}, {p.get('sex') or 'sex unknown'}."]
+    if cur.get("symptoms"):
+        bits.append("Reports: " + ", ".join(cur["symptoms"]) + ".")
+    if cur.get("duration"):
+        bits.append(f"Duration: {cur['duration']}.")
+    docs = [d for d in ctx.get("documents", []) if d.get("findings")]
+    for d in docs:
+        s = (d["findings"] or {}).get("summary")
+        if s:
+            bits.append(f"Document {d.get('name')}: {s}")
+    if ctx.get("previous_cases"):
+        bits.append(f"{len(ctx['previous_cases'])} previous case(s) on record.")
+    for c in ctx.get("conflicts", []):
+        bits.append(f"{c['kind'].capitalize()} ({c['field']}): " + " vs ".join(f"{s['source']}: {s['value']}" for s in c["statements"]) + ".")
+    bits.append("[AI summary unavailable - review the full intake.]")
+    return " ".join(bits)
