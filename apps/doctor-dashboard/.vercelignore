@@ -1,3 +1,5 @@
 node_modules/
 .next/
 .env*.local
+# old doctor route location (moved to src/app/doctor/case); clashes with /patient
+src/app/patient/
