@@ -49,7 +49,7 @@ Doctor web (Next.js)─┘     via /api proxy     ├── Scheduler (determini
 
 ## Stack
 
-Expo SDK 57 (React Native) · Next.js 14 · FastAPI on Vercel · Supabase · Groq `openai/gpt-oss-120b` · Gemini (`GEMINI_MODEL`, default `gemini-2.5-flash`) · PaddleOCR (self-hosted serving) · Sarvam Saaras v4 / Bulbul v3
+Expo SDK 57 (React Native) · Next.js 14 · FastAPI on Vercel · Supabase · Groq `openai/gpt-oss-120b` · Gemini (`GEMINI_MODEL`, default `gemini-3.5-flash`, with fallbacks) · PaddleOCR (self-hosted serving) · Sarvam Saaras v4 / Bulbul v3
 
 ## Run locally
 

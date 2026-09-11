@@ -124,8 +124,8 @@ Allowed danger_signs keys:
 
 def _gemini_models() -> list[str]:
     """Configured model first, then stable fallbacks (used only if a model name is rejected)."""
-    first = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-    return list(dict.fromkeys([first, "gemini-2.5-flash", "gemini-flash-latest"]))
+    first = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+    return list(dict.fromkeys([first, "gemini-3.5-flash", "gemini-flash-latest", "gemini-2.5-flash"]))[:3]
 
 
 def analyze(data: bytes, mime: str, ocr_text: str, doc_type: str | None) -> dict:
@@ -144,10 +144,10 @@ def analyze(data: bytes, mime: str, ocr_text: str, doc_type: str | None) -> dict
     error, model = "unknown", None
     for model in _gemini_models():
         try:
-            r = httpx.post(GEMINI_URL.format(model=model), headers={"x-goog-api-key": key}, json=body, timeout=30)
-            if r.status_code == 404:  # model name not available for this key: try the next one
-                error = "HTTP 404 (model not found)"
-                log.warning("Gemini model %s not found", model)
+            r = httpx.post(GEMINI_URL.format(model=model), headers={"x-goog-api-key": key}, json=body, timeout=18)
+            if r.status_code in (404, 429, 503):  # model missing, rate-limited or overloaded: try the next one
+                error = f"HTTP {r.status_code} ({model})"
+                log.warning("Gemini model %s unavailable: HTTP %s", model, r.status_code)
                 continue
             if r.status_code >= 400:
                 error = f"HTTP {r.status_code}"
@@ -163,7 +163,11 @@ def analyze(data: bytes, mime: str, ocr_text: str, doc_type: str | None) -> dict
             match = re.search(r"\{.*\}", text, re.DOTALL)
             raw = json.loads(match.group(0) if match else text)
             return {"status": "done", "model": model, "findings": clean_findings(raw)}
-        except Exception as e:  # timeout, network, invalid JSON
+        except httpx.TimeoutException:
+            error = f"timeout ({model})"
+            log.warning("Gemini model %s timed out", model)
+            continue
+        except Exception as e:  # network, invalid JSON
             error = type(e).__name__
             log.warning("Gemini analysis failed: %s", error)
             break
