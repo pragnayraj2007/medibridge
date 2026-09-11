@@ -13,6 +13,7 @@ MODELS = dict(
     use_doc_orientation_classify=False,
     use_doc_unwarping=False,
     use_textline_orientation=False,
+    enable_mkldnn=False,  # PaddlePaddle 3.3 CPU raises NotImplementedError with oneDNN on
 )
 
 

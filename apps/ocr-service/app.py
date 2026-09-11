@@ -44,6 +44,8 @@ def get_ocr():
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
+            # oneDNN off: PaddlePaddle 3.3 CPU builds raise NotImplementedError with it on
+            enable_mkldnn=False,
         )
     return _ocr
 
@@ -97,7 +99,7 @@ async def ocr(body: OcrIn, authorization: str | None = Header(None)):
     try:
         texts = await run_in_threadpool(_run, data, _suffix(data, body.fileType))
     except Exception as e:  # unreadable file, model error
-        log.warning("OCR failed: %s", e)
-        return {"errorCode": 500, "errorMsg": f"OCR failed: {type(e).__name__}"}
+        log.exception("OCR failed")
+        return {"errorCode": 500, "errorMsg": f"OCR failed: {type(e).__name__}: {str(e)[:300]}"}
     log.info("OCR %d bytes -> %d lines in %.1fs", len(data), len(texts), time.time() - started)
     return {"errorCode": 0, "errorMsg": "Success", "result": {"ocrResults": [{"prunedResult": {"rec_texts": texts}}]}}
