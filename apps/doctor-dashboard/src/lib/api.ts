@@ -1,4 +1,5 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Proxied to the backend by next.config.js (set BACKEND_URL there / in Vercel)
+const API_BASE = '/api'
 
 export type Level = 'RED' | 'YELLOW' | 'GREEN'
 export type Status = 'new' | 'reviewed' | 'follow_up'
@@ -35,7 +36,7 @@ export type Case = {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(API_URL + path, {
+  const res = await fetch(API_BASE + path, {
     ...init,
     headers: { 'Content-Type': 'application/json' },
     cache: 'no-store',

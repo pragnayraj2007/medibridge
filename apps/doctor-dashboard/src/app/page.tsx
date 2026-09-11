@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { API_URL, Case, complaint, getCases, Level, LEVEL_RANK, patientName, STATUS_LABEL, timeAgo } from '@/lib/api'
+import { Case, complaint, getCases, Level, LEVEL_RANK, patientName, STATUS_LABEL, timeAgo } from '@/lib/api'
 
 const triageStyle: Record<Level, string> = {
   RED: 'bg-red-100 text-red-700 border-red-200',
@@ -77,7 +77,7 @@ export default function Dashboard() {
       <main className="px-8 py-6 max-w-6xl mx-auto">
         {error && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            Can&apos;t reach the backend at {API_URL}. Start it with <code>uvicorn main:app</code> in apps/backend.
+            Can&apos;t reach the backend. Check the uvicorn window in apps/backend is still running (http://127.0.0.1:8000/health).
           </div>
         )}
 
