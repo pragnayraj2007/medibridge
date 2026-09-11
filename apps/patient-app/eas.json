@@ -6,12 +6,23 @@
   "build": {
     "preview": {
       "distribution": "internal",
-      "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://medibridge-api-rose.vercel.app" }
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://medibridge-api-rose.vercel.app",
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
+      },
+      "credentialsSource": "local"
     },
     "production": {
-      "android": { "buildType": "app-bundle" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://medibridge-api-rose.vercel.app" }
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://medibridge-api-rose.vercel.app",
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
+      }
     }
   }
 }

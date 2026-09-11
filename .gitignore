@@ -39,3 +39,8 @@ apps/doctor-dashboard/public/patient/
 _to_delete/
 local-secrets.txt
 .expo/
+
+# EAS Android signing (generated locally, never commit)
+credentials.json
+*.jks
+*.keystore
