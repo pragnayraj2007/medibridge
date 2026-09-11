@@ -105,7 +105,7 @@ export type Case = {
   language: string
   patient_id: string | null
   patient_code: string | null
-  patient: { name?: string | null; age?: number | null; sex?: string | null; phone?: string | null; pregnant?: boolean | null }
+  patient: { name?: string | null; age?: number | null; sex?: string | null; phone?: string | null }
   messages: { role: 'patient' | 'assistant'; text: string; via?: 'text' | 'voice' }[]
   documents: { id?: string; name: string; type?: string | null }[]
   vitals: Record<string, number | null> | null
@@ -129,7 +129,7 @@ export type Case = {
     reasons: { rule_id: string; level: Level; label: string; source: string }[]
     engine_version: string
     decided_by?: string
-    inputs?: { keyword_flags: string[]; ai_flags: string[]; document_flags: Record<string, string[]>; age: number | null; pregnant: boolean; vitals: boolean }
+    inputs?: { keyword_flags: string[]; ai_flags: string[]; document_flags: Record<string, string[]>; age: number | null; pregnant_from_patient_words?: boolean; vitals: boolean }
   }
   fused_context?: {
     sources: string[]
@@ -142,7 +142,7 @@ export type Case = {
   appointments?: Appointment[]
   previous_cases?: PreviousCase[]
   document_details?: DocumentDetail[]
-  patient_profile?: { patient_code: string; name: string | null; phone: string | null; age: number | null; sex: string | null; pregnancy_status: string } | null
+  patient_profile?: { patient_code: string; name: string | null; phone: string | null; age: number | null; sex: string | null } | null
 }
 
 // ── Auth (demo) ─────────────────────────────────────────────────────────────

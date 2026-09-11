@@ -1,4 +1,4 @@
-# MediBridge end-to-end smoke test (Windows PowerShell 5+).
+﻿# MediBridge end-to-end smoke test (Windows PowerShell 5+).
 # Patient calls go straight to the backend (like the Android app); doctor calls go
 # through the site's /api proxy (like the dashboard). Creates a "SMOKE TEST" patient,
 # three cases (RED, availability change, GREEN), then cancels its own appointments and
@@ -38,7 +38,7 @@ Check 'backend /health' {
   "storage=$($h.storage) ai=$($h.ai) voice=$($h.voice) ocr=$($h.documents.ocr) multimodal=$($h.documents.multimodal)"
 }
 Check 'patient: register -> persistent ID + QR' {
-  $r = Call Post "$Backend/patients" @{ name = 'SMOKE TEST'; age = 62; sex = 'male'; pregnancy_status = 'unknown'; language = 'en' }
+  $r = Call Post "$Backend/patients" @{ name = 'SMOKE TEST'; age = 62; sex = 'male'; language = 'en' }
   if ($r.patient.patient_code -notmatch '^PAT-[0-9A-F]{8}$') { throw "bad code $($r.patient.patient_code)" }
   $script:P = @{ 'X-Patient-Code' = $r.patient.patient_code; 'X-Patient-Token' = $r.token }
   $script:code = $r.patient.patient_code

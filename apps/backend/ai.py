@@ -148,10 +148,7 @@ def _transcript(messages) -> str:
 
 
 def _patient_line(p) -> str:
-    bits = [f"age {p.age}" if p.age is not None else "age unknown", p.sex or "sex unknown"]
-    if p.pregnant:
-        bits.append("pregnant")
-    return ", ".join(bits)
+    return ", ".join([f"age {p.age}" if p.age is not None else "age unknown", p.sex or "sex unknown"])
 
 
 # ── Intake conversation ─────────────────────────────────────────────────────

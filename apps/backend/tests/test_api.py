@@ -25,7 +25,7 @@ class ApiTest(unittest.TestCase):
         from storage import MemoryStore
         main.store = MemoryStore()
         self.c = TestClient(main.app)
-        r = self.c.post("/patients", json={"name": "Api Test", "age": 62, "sex": "male", "pregnancy_status": "unknown", "language": "en"})
+        r = self.c.post("/patients", json={"name": "Api Test", "age": 62, "sex": "male", "language": "en"})
         self.assertEqual(r.status_code, 201, r.text)
         body = r.json()
         self.code = body["patient"]["patient_code"]

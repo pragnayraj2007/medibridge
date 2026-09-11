@@ -131,7 +131,6 @@ Return a JSON object with exactly these keys:
   "lab_results": [{{"name": str, "value": str, "unit": str or null, "flag": "high"|"low"|"normal"|null}}],
   "vitals": {{"hr": num|null, "rr": num|null, "spo2": num|null, "temp": num|null, "sbp": num|null, "dbp": num|null}},
   "patient_age": number or null,
-  "pregnancy_mentioned": true/false,
   "danger_signs": [keys from the list below ONLY if the document describes that sign as current / acute; otherwise []]
 Allowed danger_signs keys:
 {vocab}"""
@@ -218,7 +217,6 @@ def clean_findings(raw: dict) -> dict:
         "lab_results": labs[:40],
         "vitals": {k: _num(vitals.get(k)) for k in ("hr", "rr", "spo2", "temp", "sbp", "dbp")},
         "patient_age": _num(raw.get("patient_age")),
-        "pregnancy_mentioned": raw.get("pregnancy_mentioned") is True,
         "danger_signs": sorted({f for f in _strs(raw.get("danger_signs")) if f in VOCABULARY}),
     }
 

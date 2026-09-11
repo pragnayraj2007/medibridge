@@ -226,7 +226,6 @@ export default function Dashboard() {
                         <div className="font-medium text-gray-900 text-sm">{patientName(c)}</div>
                         <div className="text-xs text-gray-400">
                           {c.patient_code ?? 'no patient ID'} · {c.patient.age != null ? `${c.patient.age}y` : 'age ?'}{c.patient.sex ? ` ${c.patient.sex[0].toUpperCase()}` : ''}
-                          {c.patient.pregnant ? ' · pregnant' : ''}
                         </div>
                         <div className="text-xs text-gray-500 line-clamp-1 max-w-[220px]">{complaint(c)}</div>
                       </td>

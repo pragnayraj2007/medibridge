@@ -71,7 +71,7 @@ def case_code(case_id: str) -> str:
 # ── Patients ────────────────────────────────────────────────────────────────
 
 def public_patient(row: dict, with_qr: bool = False) -> dict:
-    p = {k: row.get(k) for k in ("id", "patient_code", "name", "phone", "age", "sex", "pregnancy_status",
+    p = {k: row.get(k) for k in ("id", "patient_code", "name", "phone", "age", "sex",
                                  "language", "created_at", "updated_at")}
     if with_qr:
         p["qr"] = qr_data_uri(row["patient_code"])
@@ -184,13 +184,15 @@ def upload_document(store, patient: dict, data: bytes, filename: str, declared: 
 
 # ── Safety Engine ───────────────────────────────────────────────────────────
 
-def run_safety(patient, messages, vitals=None, llm_flags=(), document_flags=(), profile_pregnant=False
+def run_safety(patient, messages, vitals=None, llm_flags=(), document_flags=()
                ) -> tuple[TriageResult, list[str], bool]:
     """Keyword flags ∪ AI flags ∪ document flags -> deterministic Safety Engine.
-    Other sources can only add flags; nothing can remove a keyword flag."""
+    Other sources can only add flags; nothing can remove a keyword flag.
+    Pregnancy is never asked for or stored: it counts only when the patient says it
+    themselves, because some danger signs are read differently in pregnancy."""
     text = "\n".join(m.text for m in messages if m.role == "patient")
     keyword_flags = find_flags(text)
-    pregnant = bool(patient.pregnant) or profile_pregnant or mentions_pregnancy(text)
+    pregnant = mentions_pregnancy(text)
     result = triage(TriageInput(
         flags=keyword_flags | set(llm_flags) | set(document_flags),
         age=patient.age,
@@ -224,13 +226,12 @@ def create_case(store, body, patient: dict | None, now: datetime | None = None) 
 
     extraction = ai.extract(intake, body.messages)
     doc_flags = fusion.document_flags(docs, VOCABULARY)
-    profile_pregnant = bool(patient and patient.get("pregnancy_status") == "pregnant")
     result, keyword_flags, pregnant = run_safety(intake, body.messages, body.vitals, extraction["llm_flags"],
-                                                 doc_flags.keys(), profile_pregnant)
+                                                 doc_flags.keys())
     extraction["keyword_flags"] = keyword_flags
     extraction["document_flags"] = doc_flags
 
-    intake_patient = {**intake.model_dump(), "pregnant": pregnant}
+    intake_patient = intake.model_dump()
     context = fusion.build_context(patient or {}, intake_patient, extraction, messages, docs, previous,
                                    body.vitals.model_dump() if body.vitals else None, now)
     summary, summary_source = ai.summarize(context)
@@ -243,7 +244,7 @@ def create_case(store, body, patient: dict | None, now: datetime | None = None) 
         "ai_flags": extraction["llm_flags"],
         "document_flags": doc_flags,
         "age": intake.age,
-        "pregnant": pregnant,
+        "pregnant_from_patient_words": pregnant,
         "vitals": bool(body.vitals),
     }
     row = store.insert("cases", {

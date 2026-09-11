@@ -4,16 +4,14 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 Sex = Literal["male", "female", "other"]
-PregnancyStatus = Literal["pregnant", "not_pregnant", "unknown"]
 
 
 class Patient(BaseModel):
-    """Per-visit details sent with an intake (the Safety Engine needs age, sex, pregnancy)."""
+    """Per-visit details sent with an intake (the Safety Engine needs age and sex)."""
     name: Optional[str] = Field(None, max_length=120)
     age: Optional[int] = Field(None, ge=0, le=130)
     sex: Optional[Sex] = None
     phone: Optional[str] = Field(None, max_length=20)
-    pregnant: Optional[bool] = None
 
 
 class Message(BaseModel):
@@ -62,7 +60,6 @@ class PatientRegister(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
     age: int = Field(ge=0, le=130)
     sex: Optional[Sex] = None
-    pregnancy_status: PregnancyStatus = "unknown"
     language: str = Field("en", max_length=10)
 
 
@@ -71,7 +68,6 @@ class PatientUpdate(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
     age: Optional[int] = Field(None, ge=0, le=130)
     sex: Optional[Sex] = None
-    pregnancy_status: Optional[PregnancyStatus] = None
     language: Optional[str] = Field(None, max_length=10)
 
 

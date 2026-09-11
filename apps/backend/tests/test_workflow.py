@@ -146,10 +146,10 @@ class FusionTest(unittest.TestCase):
                  "triage_level": "YELLOW", "extraction": {"symptoms": ["chest pain"], "duration": "1 day"}, "summary": "..."}]
         doc = {"id": "d1", "name": "discharge.pdf", "status": "processed",
                "analysis": {"status": "done", "findings": {"medications": ["Atorvastatin 20 mg"], "allergies": ["penicillin"],
-                                                           "patient_age": 48, "pregnancy_mentioned": False,
+                                                           "patient_age": 48,
                                                            "danger_signs": ["chest_pain", "made_up_flag"]}}}
         ctx = fusion.build_context(
-            {"patient_code": "PAT-1", "age": 62, "pregnancy_status": "unknown"}, {"age": 62, "sex": "male"},
+            {"patient_code": "PAT-1", "age": 62}, {"age": 62, "sex": "male"},
             {"symptoms": ["chest pain"], "duration": "started today", "medications": [], "allergies": [], "history": []},
             [{"role": "patient", "text": "chest pain since morning", "via": "voice"}], [doc], prev, None, NOW)
         fields = {(c["field"], c["kind"]) for c in ctx["conflicts"]}
@@ -177,7 +177,7 @@ class EndToEndTest(unittest.TestCase):
         service.reset_demo(self.store, cancel_upcoming=False, now=NOW)
 
     def register(self, **kw):
-        data = {"name": "Test", "phone": None, "age": 62, "sex": "male", "pregnancy_status": "unknown", "language": "en", **kw}
+        data = {"name": "Test", "phone": None, "age": 62, "sex": "male", "language": "en", **kw}
         patient, token = service.register_patient(self.store, data)
         return service.find_patient(self.store, patient["patient_code"]), token
 
@@ -280,6 +280,37 @@ class EndToEndTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PregnancyNeverCollectedTest(unittest.TestCase):
+    """Pregnancy is never asked for or stored. It counts only when the patient says it
+    themselves, because the Safety Engine reads some danger signs differently then."""
+
+    def test_no_pregnancy_field_anywhere(self):
+        import ai
+        import fusion
+        import models
+        self.assertNotIn("pregnant", models.Patient.model_fields)
+        self.assertNotIn("pregnancy_status", models.PatientRegister.model_fields)
+        self.assertNotIn("pregnancy_status", models.PatientUpdate.model_fields)
+        ctx = fusion.build_context({"patient_code": "PAT-1", "sex": "female", "age": 19}, {"age": 19, "sex": "female"},
+                                   {"symptoms": ["fever"]}, [], [], [], None, datetime(2026, 9, 12, tzinfo=timezone.utc))
+        self.assertNotIn("pregnancy_status", ctx["patient"])
+        self.assertNotIn("pregnant_this_visit", ctx["patient"])
+        self.assertNotIn("pregnan", str(ctx).lower())
+        self.assertNotIn("pregnan", ai.rules_summary(ctx).lower())
+        self.assertNotIn("pregnan", " ".join(q["en"] for q in ai.QUESTIONS.values()).lower())
+
+    def test_safety_still_reacts_to_the_patient_saying_it(self):
+        from models import Message, Patient
+        from service import run_safety
+        said = [Message(role="patient", text="I am 30 weeks pregnant and I have a severe headache")]
+        result, _, pregnant = run_safety(Patient(age=28, sex="female"), said)
+        self.assertTrue(pregnant)
+        self.assertEqual(result.level, "RED")
+        quiet = [Message(role="patient", text="I have a mild headache")]
+        result, _, pregnant = run_safety(Patient(age=28, sex="female"), quiet)
+        self.assertFalse(pregnant)
 
 
 class IntakeLengthTest(unittest.TestCase):

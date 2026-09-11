@@ -4,7 +4,6 @@ import { Platform } from 'react-native'
 export type Level = 'RED' | 'YELLOW' | 'GREEN'
 export type Message = { role: 'patient' | 'assistant'; text: string; via?: 'text' | 'voice' }
 export type Sex = 'male' | 'female' | 'other'
-export type PregnancyStatus = 'pregnant' | 'not_pregnant' | 'unknown'
 
 // Per-visit details the Safety Engine needs (sent with each intake)
 export type Patient = {
@@ -12,7 +11,6 @@ export type Patient = {
   age?: number | null
   sex?: Sex | null
   phone?: string | null
-  pregnant?: boolean | null
 }
 
 export type PatientProfile = {
@@ -22,7 +20,6 @@ export type PatientProfile = {
   phone: string | null
   age: number | null
   sex: Sex | null
-  pregnancy_status: PregnancyStatus
   language: string
   created_at: string
   qr?: string | null // PNG data URI encoding only the patient code
@@ -219,10 +216,10 @@ export async function readBase64(uri: string): Promise<string> {
 }
 
 export const api = {
-  registerPatient: (body: { name: string; phone: string | null; age: number; sex: Sex | null; pregnancy_status: PregnancyStatus; language: string }) =>
+  registerPatient: (body: { name: string; phone: string | null; age: number; sex: Sex | null; language: string }) =>
     request<{ patient: PatientProfile; token: string }>('/patients', { method: 'POST', body }),
   getPatient: (s: Session) => request<PatientProfile>(`/patients/${s.code}`, { session: s }),
-  updatePatient: (s: Session, body: Partial<Pick<PatientProfile, 'name' | 'phone' | 'age' | 'sex' | 'pregnancy_status' | 'language'>>) =>
+  updatePatient: (s: Session, body: Partial<Pick<PatientProfile, 'name' | 'phone' | 'age' | 'sex' | 'language'>>) =>
     request<PatientProfile>(`/patients/${s.code}`, { method: 'PATCH', body, session: s }),
   appointments: (s: Session) => request<Appointment[]>(`/patients/${s.code}/appointments`, { session: s }),
   cases: (s: Session) => request<PatientCase[]>(`/patients/${s.code}/cases`, { session: s }),

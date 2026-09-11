@@ -122,7 +122,6 @@ export default function PatientDetail() {
               <div className="text-sm text-gray-600 space-y-1">
                 <div className="flex gap-2"><span className="text-gray-400 w-24">Age / sex</span><span>{p.age ?? '?'} · {p.sex ?? '—'}</span></div>
                 <div className="flex gap-2"><span className="text-gray-400 w-24">Phone</span><span>{p.phone || '—'}</span></div>
-                <div className="flex gap-2"><span className="text-gray-400 w-24">Pregnant</span><span>{p.pregnant ? 'Yes' : p.pregnant === false ? 'No' : '—'}</span></div>
                 <div className="flex gap-2"><span className="text-gray-400 w-24">Language</span><span>{c.language}</span></div>
                 <div className="flex gap-2"><span className="text-gray-400 w-24">Case ID</span><span className="font-mono">{c.case_code}</span></div>
               </div>
@@ -154,7 +153,7 @@ export default function PatientDetail() {
                 <p>Keyword rules: {list((inputs?.keyword_flags ?? x.keyword_flags).map(humanFlag)) ?? 'none'}</p>
                 <p>AI extraction (candidates): {list((inputs?.ai_flags ?? x.llm_flags).map(humanFlag)) ?? 'none'}</p>
                 <p>Documents (candidates): {Object.keys(docFlags).length ? Object.entries(docFlags).map(([f, d]) => `${humanFlag(f)} (${d.join(', ')})`).join('; ') : 'none'}</p>
-                <p>Age {inputs?.age ?? p.age ?? '?'} · pregnant {inputs?.pregnant ?? p.pregnant ? 'yes' : 'no'} · vitals {inputs?.vitals ? 'yes' : 'none'}</p>
+                <p>Age {inputs?.age ?? p.age ?? '?'} · vitals {inputs?.vitals ? 'yes' : 'none'}{inputs?.pregnant_from_patient_words ? ' · patient said they are pregnant' : ''}</p>
               </div>
             </div>
 

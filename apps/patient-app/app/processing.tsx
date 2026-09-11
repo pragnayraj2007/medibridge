@@ -37,7 +37,6 @@ export default function Processing() {
     setStatus('working')
     const patient: Patient = {
       name: profile?.name, age: profile?.age, sex: profile?.sex, phone: profile?.phone,
-      pregnant: profile?.pregnancy_status === 'pregnant' ? true : profile?.pregnancy_status === 'not_pregnant' ? false : null,
     }
     try {
       const created = await api.submitCase(session, { patient, language, messages, document_ids: documents.map(d => d.id) })

@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { ComponentProps, useState } from 'react'
 import { C, S } from '../constants/theme'
-import { api, errorText, PregnancyStatus, Sex } from '../lib/api'
+import { api, errorText, Sex } from '../lib/api'
 import { useSession } from '../lib/session'
 
 export default function Auth() {
@@ -18,12 +18,10 @@ export default function Auth() {
   const [phone, setPhone] = useState(editing ? profile!.phone ?? '' : '')
   const [age, setAge] = useState(editing && profile!.age != null ? String(profile!.age) : '')
   const [sex, setSex] = useState<Sex | null>(editing ? profile!.sex : null)
-  const [pregnancy, setPregnancy] = useState<PregnancyStatus>(editing ? profile!.pregnancy_status : 'unknown')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   const ageNum = Number(age)
-  const canBePregnant = sex === 'female' && age !== '' && ageNum >= 12 && ageNum <= 55
 
   const submit = async () => {
     if (!name.trim()) return setError('Please enter your name.')
@@ -35,7 +33,6 @@ export default function Auth() {
       phone: phone.trim() || null,
       age: ageNum,
       sex,
-      pregnancy_status: canBePregnant ? pregnancy : ('unknown' as PregnancyStatus),
     }
     try {
       if (editing) {
@@ -91,18 +88,6 @@ export default function Auth() {
             ))}
           </View>
 
-          {canBePregnant && (
-            <>
-              <Text style={styles.label}>Are you pregnant?</Text>
-              <View style={styles.chipRow}>
-                {([['Yes', 'pregnant'], ['No', 'not_pregnant'], ['Not sure', 'unknown']] as [string, PregnancyStatus][]).map(([label, val]) => (
-                  <TouchableOpacity key={val} style={[styles.chip, pregnancy === val && styles.chipActive]} onPress={() => setPregnancy(val)}>
-                    <Text style={[styles.chipText, pregnancy === val && styles.chipTextActive]}>{label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </>
-          )}
         </View>
 
         {error && <Text style={styles.error}>{error}</Text>}

@@ -57,9 +57,6 @@ def build_context(profile: dict, intake_patient: dict, extraction: dict, message
             "name": profile.get("name"),
             "age": intake_patient.get("age", profile.get("age")),
             "sex": intake_patient.get("sex") or profile.get("sex"),
-            # Pregnancy only where it can apply, so summaries don't mention it for everyone
-            "pregnancy_status": (profile.get("pregnancy_status") or "unknown") if (intake_patient.get("sex") or profile.get("sex")) != "male" else None,
-            "pregnant_this_visit": intake_patient.get("pregnant") if (intake_patient.get("sex") or profile.get("sex")) != "male" else None,
         },
         "current": {
             "source": f"patient conversation ({extraction.get('source', 'rules')} extraction)",
@@ -120,19 +117,6 @@ def find_conflicts(ctx: dict, findings_by_doc: list[tuple[dict, dict]], now: dat
     "unconfirmed" (stated by one source, absent from the patient's own account)."""
     out: list[dict] = []
     cur = ctx["current"]
-
-    # Pregnancy: profile vs this visit vs documents
-    profile_preg = ctx["patient"]["pregnancy_status"]
-    visit_preg = ctx["patient"]["pregnant_this_visit"]
-    if profile_preg == "not_pregnant" and visit_preg:
-        out.append({"field": "pregnancy", "kind": "conflict",
-                    "statements": [{"source": "profile", "value": "not pregnant"},
-                                   {"source": "this visit", "value": "pregnant"}]})
-    for doc, f in findings_by_doc:
-        if f.get("pregnancy_mentioned") and not visit_preg and profile_preg != "pregnant":
-            out.append({"field": "pregnancy", "kind": "conflict",
-                        "statements": [{"source": "patient", "value": "not reported as pregnant"},
-                                       {"source": f"document: {doc.get('name')}", "value": "pregnancy mentioned"}]})
 
     # Age: profile vs documents
     age = ctx["patient"]["age"]

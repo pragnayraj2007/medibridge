@@ -40,7 +40,7 @@ function Upload($url, [byte[]]$bytes, $fileName, $mime, $fields, $headers) {
 }
 
 Log "MediBridge integration check  $(Get-Date -Format s)"
-$r = Call Post "$Backend/patients" @{ name = 'INTEGRATION TEST'; age = 62; sex = 'male'; pregnancy_status = 'unknown'; language = 'en' }
+$r = Call Post "$Backend/patients" @{ name = 'INTEGRATION TEST'; age = 62; sex = 'male'; language = 'en' }
 $P = @{ 'X-Patient-Code' = $r.patient.patient_code; 'X-Patient-Token' = $r.token }
 Log "patient $($r.patient.patient_code)"
 $script:wav = $null; $script:transcript = $null; $script:doc = $null; $script:appts = @()

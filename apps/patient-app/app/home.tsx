@@ -15,7 +15,6 @@ import { useSession } from '../lib/session'
 type Section = 'appointments' | 'cases' | 'documents' | 'profile'
 
 const SEX = { male: 'Male', female: 'Female', other: 'Other' } as const
-const PREGNANCY = { pregnant: 'Pregnant', not_pregnant: 'Not pregnant', unknown: 'Not stated' } as const
 const DOC_STATUS = { processed: 'Read', partial: 'Text only', empty: 'Unreadable', failed: 'Not read' } as const
 
 export default function Home() {
@@ -201,7 +200,6 @@ export default function Home() {
             <ProfileRow label="Phone" value={profile.phone} />
             <ProfileRow label="Age" value={profile.age != null ? String(profile.age) : null} />
             <ProfileRow label="Sex" value={profile.sex ? SEX[profile.sex] : null} />
-            {profile.sex === 'female' && <ProfileRow label="Pregnancy" value={PREGNANCY[profile.pregnancy_status]} />}
             <ProfileRow label="Member since" value={shortDate(profile.created_at)} />
           </View>
         </View>

@@ -31,7 +31,6 @@ export default function Chat() {
     age: profile?.age,
     sex: profile?.sex,
     phone: profile?.phone,
-    pregnant: profile?.pregnancy_status === 'pregnant' ? true : profile?.pregnancy_status === 'not_pregnant' ? false : null,
   }
 
   const ask = async (history: Message[]) => {
