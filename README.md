@@ -22,7 +22,7 @@ Patient app (Expo) ──┐                        ┌── Groq gpt-oss-120b:
                      ├──→ FastAPI (Vercel) ───┼── Safety Engine (deterministic, final triage)
 Doctor web (Next.js)─┘     via /api proxy     ├── Scheduler (deterministic: priority, availability, distance)
                                               ├── Sarvam: speech-to-text (Saaras) / text-to-speech (Bulbul)
-                                              ├── PaddleOCR (Hugging Face Space) + Gemini multimodal
+                                              ├── PaddleOCR (Modal, scales to zero) + Gemini multimodal
                                               └── Supabase: patients, doctors, cases, appointments, documents
 ```
 
@@ -49,7 +49,7 @@ Doctor web (Next.js)─┘     via /api proxy     ├── Scheduler (determini
 
 ## Stack
 
-Expo SDK 57 (React Native) · Next.js 14 · FastAPI on Vercel · Supabase · Groq `openai/gpt-oss-120b` · Gemini (`GEMINI_MODEL`, default `gemini-3.5-flash`, with fallbacks) · PaddleOCR (self-hosted serving) · Sarvam Saaras v4 / Bulbul v3
+Expo SDK 57 (React Native) · Next.js 14 · FastAPI on Vercel · Supabase · Groq `openai/gpt-oss-120b` · Gemini (`GEMINI_MODEL`, default `gemini-3.5-flash`, with fallbacks) · PaddleOCR 3.x on Modal · Sarvam Saaras v4 / Bulbul v3
 
 ## Run locally
 
@@ -70,7 +70,7 @@ npx eas-cli@latest build -p android --profile preview   # installable APK
 
 Database: in the Supabase SQL Editor run `apps/backend/supabase/schema.sql`, then `supabase/migrations/002_patients_appointments.sql`. The migration adds the tables, the private `documents` bucket and the three demo doctors. The demo doctor password is shared by the team and is not in this repo (only its hash is).
 
-PaddleOCR is too large for Vercel functions, so it runs as its own small service: `apps/ocr-service` (PaddleOCR 3.x, PP-OCRv5 mobile models) on a free Hugging Face Docker Space. Put a Hugging Face write token in `local-secrets.txt` as `HF_TOKEN` and run `scripts/deploy-ocr-space.py`. It creates the Space, sets a bearer token, waits for the build, tests it and writes `PADDLEOCR_URL`/`PADDLEOCR_TOKEN` for `set-api-env.bat`. A free Space sleeps after about 48 h idle, so open it once before a demo. If OCR is slow or down, Gemini still reads the document.
+PaddleOCR is too large for Vercel functions, so it runs as its own small service: `apps/ocr-service` (PaddleOCR 3.x, PP-OCRv5 mobile models) on Modal. Modal's free monthly credits need no card, and the service scales to zero when idle. Put `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET` in `local-secrets.txt` and run `scripts/deploy-ocr-modal.py`. It creates the bearer-token secret, deploys, tests with the sample report and writes `PADDLEOCR_URL`/`PADDLEOCR_TOKEN` for `set-api-env.bat`. Starting a consultation wakes the service early. If OCR is slow or down, Gemini still reads the document.
 
 ## Deploy (Windows, from the repo root)
 
@@ -90,6 +90,6 @@ Secrets exist only on the backend. Never commit `.env` or `local-secrets.txt`.
 - Distances use one fixed demo patient location. Patient GPS is not used yet.
 - There are no working-hours calendars, and urgent cases do not bump existing bookings.
 - Doctor auth is demo-grade. A patient ID can only be reopened on the device that created it.
-- PaddleOCR runs on a free Hugging Face Space. It is slow on its first request after sleeping; Gemini covers it.
+- PaddleOCR on Modal takes about 20 s to wake after idling; the app wakes it when a consultation starts, and Gemini covers any gap.
 - Voice and document analysis need `SARVAM_API_KEY` and `GEMINI_API_KEY`. Without them the app says so and continues with text.
 - The Safety Engine thresholds and the scheduling rules need clinical review before any real use. This is a workflow tool, not a diagnostic system.

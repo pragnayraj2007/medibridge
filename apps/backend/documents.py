@@ -103,6 +103,18 @@ def run_ocr(data: bytes, mime: str) -> dict:
         return {"status": "failed", "engine": "paddleocr", "text": "", "error": type(e).__name__}
 
 
+def warm_up() -> str:
+    """Wake a scaled-to-zero OCR service early (called when a consultation starts)."""
+    url = os.getenv("PADDLEOCR_URL")
+    if not url:
+        return "off"
+    try:
+        httpx.get(url.rstrip("/").removesuffix("/ocr") + "/", timeout=2.5)
+        return "ready"
+    except httpx.HTTPError:
+        return "warming"  # the request still reaches the service and starts it
+
+
 # ── Multimodal analysis (Gemini) ────────────────────────────────────────────
 
 GEMINI_PROMPT = """You read a patient's medical document (image or PDF) for a doctor. Extract only what is written; never guess.

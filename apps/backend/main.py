@@ -182,6 +182,11 @@ async def upload_document(file: UploadFile = File(...), doc_type: Optional[str] 
         raise HTTPException(e.status, str(e))
 
 
+@app.post("/documents/warmup")
+def documents_warmup(patient: dict = Depends(current_patient)):
+    return {"ocr": docs_pipeline.warm_up()}
+
+
 @app.get("/documents/{doc_id}/file")
 def document_file(doc_id: str, doctor: dict = Depends(doctor_auth)):
     if not service.valid_uuid(doc_id):

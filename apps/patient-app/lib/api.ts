@@ -176,6 +176,7 @@ export const api = {
 
   uploadDocument: (s: Session, form: FormData) =>
     request<UploadedDocument>('/documents', { method: 'POST', form, session: s, timeoutMs: 90000 }),
+  warmOcr: (s: Session) => request<{ ocr: string }>('/documents/warmup', { method: 'POST', session: s, timeoutMs: 8000 }),
   transcribe: (s: Session, form: FormData) =>
     request<{ transcript: string; language_code: string | null }>('/voice/transcribe', { method: 'POST', form, session: s, timeoutMs: 45000 }),
   speak: (s: Session, text: string, language: string) =>

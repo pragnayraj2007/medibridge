@@ -56,6 +56,7 @@ export default function Chat() {
 
   useEffect(() => {
     if (messages.length === 0) ask([])
+    if (session) api.warmOcr(session).catch(() => {}) // wake the OCR service before documents are added
     return () => stopSpeaking()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
