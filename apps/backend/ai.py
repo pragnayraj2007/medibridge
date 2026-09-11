@@ -42,16 +42,16 @@ def ai_enabled() -> bool:
     return bool(os.getenv("GROQ_API_KEY"))
 
 
-def _chat(messages: list[dict], json_mode: bool = False, timeout: float = 20) -> str:
-    body = {"model": GROQ_MODEL, "messages": messages, "temperature": 0.2}
+def _chat(messages: list[dict], json_mode: bool = False, timeout: float = 20, extra: dict | None = None) -> str:
+    body = {"model": GROQ_MODEL, "messages": messages, "temperature": 0.2, **(extra or {})}
     if json_mode:
         body["response_format"] = {"type": "json_object"}
-    r = httpx.post(
-        GROQ_URL,
-        headers={"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"},
-        json=body,
-        timeout=timeout,
-    )
+    headers = {"Authorization": f"Bearer {os.environ['GROQ_API_KEY']}"}
+    r = httpx.post(GROQ_URL, headers=headers, json=body, timeout=timeout)
+    if r.status_code == 400 and extra:  # the model rejected an optional parameter: retry without it
+        log.warning("Groq rejected %s, retrying without it", sorted(extra))
+        body = {k: v for k, v in body.items() if k not in extra}
+        r = httpx.post(GROQ_URL, headers=headers, json=body, timeout=timeout)
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"] or ""
 
@@ -67,39 +67,7 @@ def _patient_line(p) -> str:
     return ", ".join(bits)
 
 
-# ── Intake conversation ─────────────────────────────────────────────────────
-
-NEXT_QUESTION_PROMPT = """You are MediBridge, a friendly intake assistant collecting information for a doctor before a clinic visit.
-Ask ONE short, simple question at a time, in {language}. The whole interview is at most {max_questions} questions and you have asked {asked} so far, so combine related items into one question (for example when it started and how bad it is from 1 to 10). In order of importance: main complaint; onset and severity; other symptoms; conditions, medicines and allergies (pregnancy if relevant). Skip anything the patient already told you.
-Patients answer in their own words, typed or spoken. Spoken answers are speech-to-text transcripts and may contain recognition errors: if an answer is unclear, ask them to repeat or clarify it.
-Never offer answer options or multiple-choice lists; ask open questions.
-Never diagnose, never say how urgent it is, never give treatment advice. If the patient describes an emergency, first tell them to alert staff immediately, then still ask your next question in the same reply.
-When you have enough information, or you reach the limit, reply exactly: DONE"""
-
-
-def next_question(patient, messages, language: str = "en", urgent: bool = False) -> tuple[str, str]:
-    """Returns (question, source). Question == DONE_MESSAGE when intake is complete.
-    Hard limits (not left to the model): MAX_QUESTIONS, or URGENT_MAX_QUESTIONS once the
-    Safety Engine has already flagged RED."""
-    asked = sum(1 for m in messages if m.role == "assistant")
-    limit = min(MAX_QUESTIONS, URGENT_MAX_QUESTIONS) if urgent else MAX_QUESTIONS
-    if asked >= limit:
-        return DONE_MESSAGE, "rules"
-    if ai_enabled():
-        try:
-            prompt = NEXT_QUESTION_PROMPT.format(language=LANGUAGES.get(language, "English"),
-                                                 max_questions=limit, asked=asked)
-            reply = _chat([
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": f"Patient: {_patient_line(patient)}\n\n{_transcript(messages) or '(no messages yet)'}"},
-            ]).strip()
-            if reply:
-                return (DONE_MESSAGE if reply.upper().startswith("DONE") else reply), "groq"
-        except Exception as e:  # network, auth, quota, bad response
-            log.warning("Groq next_question failed, using fallback: %s", e)
-    if asked < len(FALLBACK_QUESTIONS):
-        return FALLBACK_QUESTIONS[asked], "rules"
-    return DONE_MESSAGE, "rules"
+# ── Intake conversation: see intake_agent.py ────────────────────────────────
 
 
 # ── Extraction + summary ────────────────────────────────────────────────────

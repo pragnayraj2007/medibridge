@@ -11,6 +11,7 @@ load_dotenv()
 
 import ai  # noqa: E402  (reads env at call time, after load_dotenv)
 import documents as docs_pipeline  # noqa: E402
+import intake_agent  # noqa: E402
 import service  # noqa: E402
 import voice  # noqa: E402
 from auth import issue_token, patient_token_matches, verify_password, verify_token  # noqa: E402
@@ -141,10 +142,22 @@ def patient_documents(patient: dict = Depends(patient_by_code)):
 
 # ── Intake ──────────────────────────────────────────────────────────────────
 
+def optional_patient(x_patient_code: Optional[str] = Header(None), x_patient_token: Optional[str] = Header(None)) -> Optional[dict]:
+    """The registered patient when valid headers are sent; anonymous otherwise (never an error)."""
+    if not x_patient_code:
+        return None
+    patient = service.find_patient(store, x_patient_code)
+    return patient if patient and patient_token_matches(x_patient_token, patient.get("token_hash")) else None
+
+
 @app.post("/intake/next-question")
-def next_question(body: NextQuestionIn):
+def next_question(body: NextQuestionIn, patient: Optional[dict] = Depends(optional_patient)):
     result, _, _ = run_safety(body.patient, body.messages)
-    question, source = ai.next_question(body.patient, body.messages, body.language, urgent=result.level == "RED")
+    question, source, meta = intake_agent.next_question(
+        body.patient, body.messages, body.language, urgent=result.level == "RED",
+        brief=intake_agent.cached_brief(store, patient), safety_labels=[r.label for r in result.reasons])
+    if meta.get("thinking"):
+        logging.getLogger("medibridge.intake").info("agent reasoning: %s", meta["thinking"])
     return {
         "question": question,
         "done": question == ai.DONE_MESSAGE,

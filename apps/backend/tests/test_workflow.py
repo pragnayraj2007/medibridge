@@ -292,14 +292,16 @@ class IntakeLengthTest(unittest.TestCase):
 
     def test_short_interview(self):
         import ai
+        import intake_agent
         from models import Patient
         self.assertEqual(ai.MAX_QUESTIONS, 4)
-        asked = [ai.next_question(Patient(), self.msgs(n))[0] for n in range(5)]
+        asked = [intake_agent.next_question(Patient(), self.msgs(n))[0] for n in range(5)]
         self.assertEqual(asked[:4], ai.FALLBACK_QUESTIONS)
         self.assertEqual(asked[4], ai.DONE_MESSAGE)
 
     def test_urgent_interview_is_shorter(self):
         import ai
+        import intake_agent
         from models import Patient
-        self.assertNotEqual(ai.next_question(Patient(), self.msgs(1), urgent=True)[0], ai.DONE_MESSAGE)
-        self.assertEqual(ai.next_question(Patient(), self.msgs(2), urgent=True)[0], ai.DONE_MESSAGE)
+        self.assertNotEqual(intake_agent.next_question(Patient(), self.msgs(1), urgent=True)[0], ai.DONE_MESSAGE)
+        self.assertEqual(intake_agent.next_question(Patient(), self.msgs(2), urgent=True)[0], ai.DONE_MESSAGE)

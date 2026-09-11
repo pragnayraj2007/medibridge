@@ -38,7 +38,7 @@ export default function Chat() {
     setLoading(true)
     setError(false)
     try {
-      const res = await api.nextQuestion({ patient, language, messages: history })
+      const res = await api.nextQuestion({ patient, language, messages: history }, session)
       update({ messages: [...history, { role: 'assistant', text: res.question }] })
       setDone(res.done)
       if (res.safety.urgent) setUrgent(res.safety.guidance)

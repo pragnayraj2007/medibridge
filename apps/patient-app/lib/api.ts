@@ -167,8 +167,9 @@ export const api = {
   caseDetail: (s: Session, id: string) => request<PatientCase>(`/patients/${s.code}/cases/${id}`, { session: s }),
   documents: (s: Session) => request<UploadedDocument[]>(`/patients/${s.code}/documents`, { session: s }),
 
-  nextQuestion: (body: { patient: Patient; language: string; messages: Message[] }) =>
-    request<NextQuestionResponse>('/intake/next-question', { method: 'POST', body }),
+  // With a session the agent also uses the patient's previous visits and uploaded reports
+  nextQuestion: (body: { patient: Patient; language: string; messages: Message[] }, s?: Session | null) =>
+    request<NextQuestionResponse>('/intake/next-question', { method: 'POST', body, session: s }),
   submitCase: (s: Session, body: { patient: Patient; language: string; messages: Message[]; document_ids: string[] }) =>
     request<CaseResponse>('/cases', { method: 'POST', body, session: s, timeoutMs: 90000 }),
   rebook: (s: Session, caseId: string, preferredAt: Date) =>
