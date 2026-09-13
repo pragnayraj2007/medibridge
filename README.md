@@ -67,6 +67,15 @@ medibridge/
 ---
 
 ## Setup
+MediBridge is an active prototype focused on AI-assisted clinical intake and deterministic patient triage.
+
+### Current Stack
+
+- Frontend: Next.js / Expo
+- Backend: FastAPI
+- AI: Groq
+- Database: Supabase
+- Safety: Deterministic WHO/ICRC/MSF IITT-based Safety Engine
 
 ### Prerequisites
 
@@ -173,3 +182,4 @@ main
 ## Team
 
 MediBridge — Hackathon 2026
+
